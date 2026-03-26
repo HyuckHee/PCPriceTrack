@@ -1,0 +1,31 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "API (NestJS dev)",
+      "runtimeExecutable": "/bin/zsh",
+      "runtimeArgs": ["-c", "export PATH=/opt/homebrew/bin:$PATH && pnpm --filter api dev"],
+      "port": 3001,
+      "autoPort": false
+    },
+    {
+      "name": "Web (Next.js dev)",
+      "runtimeExecutable": "/bin/zsh",
+      "runtimeArgs": ["-c", "export PATH=/opt/homebrew/bin:$PATH && pnpm --filter web dev"],
+      "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "Drizzle Studio",
+      "runtimeExecutable": "/bin/zsh",
+      "runtimeArgs": ["-c", "export PATH=/opt/homebrew/bin:$PATH && pnpm --filter api db:studio"],
+      "port": 4983
+    },
+    {
+      "name": "Portfolio",
+      "runtimeExecutable": "/bin/zsh",
+      "runtimeArgs": ["-c", "export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH && cd /Users/husker/PCPriceTrack/portfolio && node_modules/.bin/vite --port 4000"],
+      "port": 4000
+    }
+  ]
+}
