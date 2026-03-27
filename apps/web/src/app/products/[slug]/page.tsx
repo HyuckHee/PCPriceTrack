@@ -1,55 +1,17 @@
 import { notFound } from 'next/navigation';
-import { api } from '@/lib/api';
+import { fetchProduct, fetchPriceHistory } from '@/lib/data';
 import { ProductLowestPrice, ProductStoreList } from '@/components/ProductStorePrices';
 import PriceHistoryChart from './PriceHistoryChart';
-import { MOCK_PRODUCT_DETAILS, getMockPriceHistory } from '@/lib/mock-data';
-
-interface Listing {
-  listingId: string;
-  url: string;
-  latestPrice: string | null;
-  latestCurrency: string | null;
-  latestOriginalPrice: string | null;
-  inStock: boolean | null;
-  store: { id: string; name: string; logoUrl: string | null };
-}
-
-interface PriceRecord {
-  price: string;
-  recordedAt: string;
-  store: { id: string; name: string };
-}
-
-interface Product {
-  id: string;
-  name: string;
-  brand: string;
-  model: string;
-  slug: string;
-  imageUrl: string | null;
-  description: string | null;
-  specs: Record<string, unknown>;
-  category: { name: string; slug: string };
-  listings: Listing[];
-}
 
 export const revalidate = 60;
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
 
-  let product: Product;
-  try {
-    product = await api.get<Product>(`/products/${slug}`);
-  } catch {
-    const mock = MOCK_PRODUCT_DETAILS[slug];
-    if (!mock) notFound();
-    product = mock as Product;
-  }
+  const product = await fetchProduct(slug);
+  if (!product) notFound();
 
-  const priceHistory = await api
-    .get<PriceRecord[]>(`/products/${slug}/price-history?days=30`)
-    .catch(() => getMockPriceHistory(slug) as PriceRecord[]);
+  const priceHistory = await fetchPriceHistory(slug);
 
   const lowestListing = [...product.listings]
     .filter((l) => l.latestPrice)

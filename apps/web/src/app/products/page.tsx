@@ -1,45 +1,7 @@
 import Link from 'next/link';
-import { api } from '@/lib/api';
+import { fetchProducts, fetchCategories, fetchDeals } from '@/lib/data';
 import { ProductCard } from '@/components/ProductCard';
 import { DealCard } from '@/components/DealCard';
-import { MOCK_CATEGORIES, MOCK_DEALS, getMockProductsResponse } from '@/lib/mock-data';
-
-interface Product {
-  id: string;
-  name: string;
-  brand: string;
-  slug: string;
-  imageUrl: string | null;
-  lowestPrice: string | null;
-  lowestCurrency: string | null;
-  previousLowestPrice: string | null;
-  originalPrice: string | null;
-  storeNames: string | null;
-  category: { id: string; name: string };
-}
-
-interface Category {
-  id: string;
-  name: string;
-  slug: string;
-}
-
-interface Deal {
-  id: string;
-  name: string;
-  brand: string;
-  slug: string;
-  categoryName: string;
-  currentPrice: string;
-  previousPrice: string;
-  originalPrice: string | null;
-  currency: string;
-}
-
-interface ProductsResponse {
-  data: Product[];
-  meta: { total: number; page: number; totalPages: number };
-}
 
 export const revalidate = 60;
 
@@ -55,23 +17,11 @@ export default async function ProductsPage({
   const minPrice = params.minPrice ?? '';
   const maxPrice = params.maxPrice ?? '';
 
-  const query = new URLSearchParams({ page, limit: '24' });
-  if (search) query.set('search', search);
-  if (categoryId) query.set('categoryId', categoryId);
-  if (minPrice) query.set('minPrice', minPrice);
-  if (maxPrice) query.set('maxPrice', maxPrice);
-
-  const [productsRes, categories, deals] = await Promise.all([
-    api.get<ProductsResponse>(`/products?${query}`).catch(() => null),
-    api.get<Category[]>('/categories').catch(() => null),
-    page === '1'
-      ? api.get<Deal[]>(`/products/deals?limit=5${categoryId ? `&categoryId=${categoryId}` : ''}`).catch(() => null)
-      : Promise.resolve(null),
+  const [{ data: products, meta }, categories, deals] = await Promise.all([
+    fetchProducts({ search, categoryId, minPrice, maxPrice, page }),
+    fetchCategories(),
+    page === '1' ? fetchDeals(5, categoryId || undefined) : Promise.resolve([]),
   ]);
-
-  const { data: products, meta } = productsRes ?? getMockProductsResponse({ search, categoryId, minPrice, maxPrice, page, limit: 24 });
-  const resolvedCategories: Category[] = categories ?? MOCK_CATEGORIES;
-  const resolvedDeals: Deal[] = deals ?? (page === '1' ? (MOCK_DEALS.slice(0, 5) as Deal[]) : []);
 
   const buildUrl = (overrides: Record<string, string>) => {
     const p = new URLSearchParams({ page: '1', ...(search && { search }), ...(categoryId && { categoryId }), ...(minPrice && { minPrice }), ...(maxPrice && { maxPrice }), ...overrides });
@@ -99,7 +49,7 @@ export default async function ProductsPage({
           className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
         >
           <option value="">전체 카테고리</option>
-          {resolvedCategories.map((c) => (
+          {categories.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
@@ -138,13 +88,13 @@ export default async function ProductsPage({
         )}
       </form>
 
-      {resolvedDeals.length > 0 && (
+      {deals.length > 0 && (
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-base flex items-center gap-2">
               <span className="text-red-400">↓</span>
               {categoryId
-                ? `${resolvedCategories.find((c) => c.id === categoryId)?.name ?? ''} 특가`
+                ? `${categories.find((c) => c.id === categoryId)?.name ?? ''} 특가`
                 : '오늘의 특가'}
             </h2>
             <Link href="/deals" className="text-xs text-blue-400 hover:text-blue-300">
@@ -152,7 +102,7 @@ export default async function ProductsPage({
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-            {resolvedDeals.map((deal) => (
+            {deals.map((deal) => (
               <DealCard key={deal.id} deal={deal} compact />
             ))}
           </div>

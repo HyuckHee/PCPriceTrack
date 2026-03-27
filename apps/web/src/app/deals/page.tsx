@@ -1,25 +1,10 @@
-import { api } from '@/lib/api';
+import { fetchDeals } from '@/lib/data';
 import { DealCard } from '@/components/DealCard';
-import { MOCK_DEALS } from '@/lib/mock-data';
-
-interface Deal {
-  id: string;
-  name: string;
-  brand: string;
-  slug: string;
-  imageUrl: string | null;
-  categoryName: string;
-  categorySlug: string;
-  currentPrice: string;
-  previousPrice: string;
-  originalPrice: string | null;
-  currency: string;
-}
 
 export const revalidate = 120;
 
 export default async function DealsPage() {
-  const deals = await api.get<Deal[]>('/products/deals?limit=50').catch(() => MOCK_DEALS as Deal[]);
+  const deals = await fetchDeals(50);
 
   return (
     <div>
