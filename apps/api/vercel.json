@@ -1,0 +1,7 @@
+{
+  "buildCommand": "node -e \"const fs=require('fs'); fs.mkdirSync('public',{recursive:true}); fs.writeFileSync('public/index.json', JSON.stringify({message:'API requires a dedicated server (PostgreSQL + Redis). This is a demo deployment.',status:503}));\"",
+  "outputDirectory": "public",
+  "routes": [
+    { "src": "/(.*)", "dest": "/index.json" }
+  ]
+}
