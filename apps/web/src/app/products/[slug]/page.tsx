@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { api } from '@/lib/api';
 import { ProductLowestPrice, ProductStoreList } from '@/components/ProductStorePrices';
 import PriceHistoryChart from './PriceHistoryChart';
+import { MOCK_PRODUCT_DETAILS, getMockPriceHistory } from '@/lib/mock-data';
 
 interface Listing {
   listingId: string;
@@ -41,12 +42,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   try {
     product = await api.get<Product>(`/products/${slug}`);
   } catch {
-    notFound();
+    const mock = MOCK_PRODUCT_DETAILS[slug];
+    if (!mock) notFound();
+    product = mock as Product;
   }
 
   const priceHistory = await api
     .get<PriceRecord[]>(`/products/${slug}/price-history?days=30`)
-    .catch(() => [] as PriceRecord[]);
+    .catch(() => getMockPriceHistory(slug) as PriceRecord[]);
 
   const lowestListing = [...product.listings]
     .filter((l) => l.latestPrice)

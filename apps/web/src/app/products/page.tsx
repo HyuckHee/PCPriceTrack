@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { ProductCard } from '@/components/ProductCard';
 import { DealCard } from '@/components/DealCard';
+import { MOCK_CATEGORIES, MOCK_DEALS, getMockProductsResponse } from '@/lib/mock-data';
 
 interface Product {
   id: string;
@@ -60,13 +61,17 @@ export default async function ProductsPage({
   if (minPrice) query.set('minPrice', minPrice);
   if (maxPrice) query.set('maxPrice', maxPrice);
 
-  const [{ data: products, meta }, categories, deals] = await Promise.all([
-    api.get<ProductsResponse>(`/products?${query}`),
-    api.get<Category[]>('/categories').catch(() => [] as Category[]),
+  const [productsRes, categories, deals] = await Promise.all([
+    api.get<ProductsResponse>(`/products?${query}`).catch(() => null),
+    api.get<Category[]>('/categories').catch(() => null),
     page === '1'
-      ? api.get<Deal[]>(`/products/deals?limit=5${categoryId ? `&categoryId=${categoryId}` : ''}`).catch(() => [] as Deal[])
-      : Promise.resolve([] as Deal[]),
+      ? api.get<Deal[]>(`/products/deals?limit=5${categoryId ? `&categoryId=${categoryId}` : ''}`).catch(() => null)
+      : Promise.resolve(null),
   ]);
+
+  const { data: products, meta } = productsRes ?? getMockProductsResponse({ search, categoryId, minPrice, maxPrice, page, limit: 24 });
+  const resolvedCategories: Category[] = categories ?? MOCK_CATEGORIES;
+  const resolvedDeals: Deal[] = deals ?? (page === '1' ? (MOCK_DEALS.slice(0, 5) as Deal[]) : []);
 
   const buildUrl = (overrides: Record<string, string>) => {
     const p = new URLSearchParams({ page: '1', ...(search && { search }), ...(categoryId && { categoryId }), ...(minPrice && { minPrice }), ...(maxPrice && { maxPrice }), ...overrides });
@@ -94,7 +99,7 @@ export default async function ProductsPage({
           className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
         >
           <option value="">전체 카테고리</option>
-          {categories.map((c) => (
+          {resolvedCategories.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
@@ -133,13 +138,13 @@ export default async function ProductsPage({
         )}
       </form>
 
-      {deals.length > 0 && (
+      {resolvedDeals.length > 0 && (
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-base flex items-center gap-2">
               <span className="text-red-400">↓</span>
               {categoryId
-                ? `${categories.find((c) => c.id === categoryId)?.name ?? ''} 특가`
+                ? `${resolvedCategories.find((c) => c.id === categoryId)?.name ?? ''} 특가`
                 : '오늘의 특가'}
             </h2>
             <Link href="/deals" className="text-xs text-blue-400 hover:text-blue-300">
@@ -147,7 +152,7 @@ export default async function ProductsPage({
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-            {deals.map((deal) => (
+            {resolvedDeals.map((deal) => (
               <DealCard key={deal.id} deal={deal} compact />
             ))}
           </div>

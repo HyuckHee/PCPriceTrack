@@ -1,5 +1,6 @@
 import { api } from '@/lib/api';
 import { DealCard } from '@/components/DealCard';
+import { MOCK_DEALS } from '@/lib/mock-data';
 
 interface Deal {
   id: string;
@@ -18,7 +19,7 @@ interface Deal {
 export const revalidate = 120;
 
 export default async function DealsPage() {
-  const deals = await api.get<Deal[]>('/products/deals?limit=50').catch(() => [] as Deal[]);
+  const deals = await api.get<Deal[]>('/products/deals?limit=50').catch(() => MOCK_DEALS as Deal[]);
 
   return (
     <div>
