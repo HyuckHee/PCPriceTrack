@@ -1,4 +1,4 @@
-import { boolean, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { boolean, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 
 export const stores = pgTable('stores', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -9,7 +9,9 @@ export const stores = pgTable('stores', {
   crawlConfig: text('crawl_config'), // JSON string: selectors, pagination rules
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  uniqueIndex('stores_name_idx').on(t.name),
+]);
 
 export type Store = typeof stores.$inferSelect;
 export type NewStore = typeof stores.$inferInsert;
