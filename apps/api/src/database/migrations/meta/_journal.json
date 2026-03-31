@@ -15,6 +15,13 @@
       "when": 1774603361974,
       "tag": "0001_lucky_rocket_racer",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774952381784,
+      "tag": "0002_short_red_shift",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,7 @@ import { CrawlerModule } from './modules/crawler/crawler.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ProductsModule } from './modules/products/products.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
+import { BuildsModule } from './modules/builds/builds.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 @Module({
@@ -53,6 +54,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     AuthModule,
     ProductsModule,
     AlertsModule,
+    BuildsModule,
     CrawlerModule,
   ],
   providers: [

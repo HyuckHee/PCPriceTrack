@@ -7,4 +7,5 @@ export * from './users';
 export * from './alerts';
 export * from './notifications';
 export * from './crawl-jobs';
+export * from './pc-builds';
 export * from './relations';

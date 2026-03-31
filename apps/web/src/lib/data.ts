@@ -139,3 +139,77 @@ export async function fetchPriceHistory(slug: string): Promise<PriceRecord[]> {
     .get<PriceRecord[]>(`/products/${slug}/price-history?days=30`)
     .catch(() => getMockPriceHistory(slug) as PriceRecord[]);
 }
+
+// ── Build Estimator ────────────────────────────────────────────────────────────
+
+export interface BuildComponent {
+  category: string;
+  categoryName: string;
+  productId: string;
+  productName: string;
+  slug: string;
+  brand: string;
+  imageUrl: string | null;
+  price: number;
+  currency: string;
+  storeUrl: string | null;
+  storeName: string | null;
+  inStock: boolean;
+  budgetAllocation?: number;
+}
+
+export interface BuildEstimate {
+  budget: number;
+  currency: string;
+  totalPrice: number;
+  components: (BuildComponent | null)[];
+}
+
+export interface SavedBuild {
+  id: string;
+  name: string;
+  budget: string;
+  currency: string;
+  totalPrice: string | null;
+  components: BuildComponent[];
+  createdAt: string;
+}
+
+export async function fetchBuildEstimate(
+  budget: number,
+  currency: string,
+): Promise<BuildEstimate | null> {
+  try {
+    return await api.post<BuildEstimate>('/builds/estimate', { budget, currency });
+  } catch {
+    return null;
+  }
+}
+
+export async function saveBuild(
+  name: string,
+  budget: number,
+  currency: string,
+  totalPrice: number,
+  components: BuildComponent[],
+): Promise<SavedBuild | null> {
+  try {
+    return await api.post<SavedBuild>('/builds', {
+      name,
+      budget,
+      currency,
+      totalPrice,
+      components,
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchSavedBuilds(limit = 20): Promise<SavedBuild[]> {
+  try {
+    return await api.get<SavedBuild[]>(`/builds?limit=${limit}`);
+  } catch {
+    return [];
+  }
+}
