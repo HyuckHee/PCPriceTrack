@@ -13,6 +13,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { BuildsModule } from './modules/builds/builds.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     BuildsModule,
     CrawlerModule,
   ],
+  controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],

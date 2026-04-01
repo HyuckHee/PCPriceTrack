@@ -38,12 +38,15 @@ export default function BuildEstimatorPanel() {
   const { isOpen, close } = useBuildEstimator();
   const { displayCurrency: currency, usdToKrw } = useCurrency();
 
-  // Drag state
-  const [pos, setPos] = useState<{ x: number; y: number }>(getDefaultPos);
+  // Drag state — initialize with static value to avoid SSR/client mismatch
+  const [pos, setPos] = useState<{ x: number; y: number }>({ x: 0, y: 80 });
   const dragging = useRef(false);
   const dragOffset = useRef({ ox: 0, oy: 0 });
 
-  // Reset position every time panel opens
+  // Set real position after mount and whenever panel opens
+  useEffect(() => {
+    setPos(getDefaultPos());
+  }, []);
   useEffect(() => {
     if (isOpen) setPos(getDefaultPos());
   }, [isOpen]);
