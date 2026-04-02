@@ -17,6 +17,7 @@ export default () => {
       host: env.REDIS_HOST,
       port: env.REDIS_PORT,
       password: env.REDIS_PASSWORD || undefined,
+      tls: env.REDIS_TLS,
     },
     jwt: {
       secret: env.JWT_SECRET,

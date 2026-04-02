@@ -34,6 +34,7 @@ export class CircuitBreakerService implements OnModuleInit {
       host: this.config.get<string>('redis.host'),
       port: this.config.get<number>('redis.port'),
       password: this.config.get<string>('redis.password') || undefined,
+      tls: this.config.get<boolean>('redis.tls') ? { rejectUnauthorized: false } : undefined,
       lazyConnect: true,
     });
   }
