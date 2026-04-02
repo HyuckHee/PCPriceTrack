@@ -77,19 +77,40 @@ export class ElevenStAdapter extends BaseSiteAdapter {
       const externalId = prdNoMatch?.[1] ?? target.externalId;
 
       // ── 상품명 ───────────────────────────────────────────────────────
-      // .c_product_info_title에는 "찜하기 공유하기" 버튼 텍스트가 섞여있어 텍스트 노드만 추출
-      const productName = await page.$eval(
-        '.c_product_info_title, #product_title, h1.title, .product_title',
-        (el: Element) => {
-          const textNodes = Array.from(el.childNodes)
-            .filter((n) => n.nodeType === 3) // TEXT_NODE only
-            .map((n) => n.textContent?.trim() ?? '')
-            .filter(Boolean);
-          return textNodes.length > 0
-            ? textNodes.join(' ').trim()
-            : (el as HTMLElement).innerText.replace(/찜하기|공유하기/g, '').trim();
-        },
-      ).catch(() => undefined);
+      // 1순위: 상품명 전용 span/em 셀렉터 (팝업 컨테이너 제외)
+      // 2순위: .c_product_info_title 직계 텍스트 노드만 추출
+      // 3순위: innerText에서 UI 잡음 제거
+      const UI_NOISE =
+        /찜하기|공유하기|찜 완료|찜해제 완료|찜이 되었습니다|찜이 취소 되었습니다|찜한상품 전체보기|페이스북|카카오스토리|닫기|복사|\bX\b/g;
+
+      const productName = await page
+        .$eval(
+          '.c_product_info_title span:not(.c_product_share):not(.c_product_wish), #product_title, h1.title, .product_title',
+          (el: Element) => {
+            const textNodes = Array.from(el.childNodes)
+              .filter((n) => n.nodeType === 3)
+              .map((n) => n.textContent?.trim() ?? '')
+              .filter(Boolean);
+            return textNodes.length > 0
+              ? textNodes.join(' ').trim()
+              : (el as HTMLElement).innerText.trim();
+          },
+        )
+        .catch(() =>
+          page.$eval(
+            '.c_product_info_title, #product_title, h1.title, .product_title',
+            (el: Element) => {
+              const textNodes = Array.from(el.childNodes)
+                .filter((n) => n.nodeType === 3)
+                .map((n) => n.textContent?.trim() ?? '')
+                .filter(Boolean);
+              return textNodes.length > 0
+                ? textNodes.join(' ').trim()
+                : (el as HTMLElement).innerText.trim();
+            },
+          ).catch(() => undefined),
+        )
+        .then((name) => name?.replace(UI_NOISE, '').replace(/\s+/g, ' ').trim() || undefined);
 
       // ── 브랜드 ───────────────────────────────────────────────────────
       // 1순위: 상품명에서 [브랜드] 패턴 추출 (예: "[이엠텍]지포스 RTX 3050")
