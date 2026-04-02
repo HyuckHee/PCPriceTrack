@@ -38,3 +38,19 @@
 - **상태**: ⏳ 미실행 (Supabase SQL 에디터에서 직접 실행 필요)
 
 ---
+
+### [3] pc_builds 유저별 데이터 분리 (버그 수정)
+- **대상 테이블**: `pc_builds`
+- **사유**: `user_id` 필터 없이 전체 조회되어 모든 유저의 견적이 공개되던 버그
+- **변경 내용**: 백엔드 쿼리에 `WHERE user_id = $userId` 조건 추가 (코드 수정, SQL 직접 실행 불필요)
+- **확인 SQL** (유저 없이 저장된 고아 데이터 조회):
+  ```sql
+  SELECT id, name, created_at FROM pc_builds WHERE user_id IS NULL;
+  ```
+- **정리 SQL** (필요시 고아 데이터 삭제):
+  ```sql
+  DELETE FROM pc_builds WHERE user_id IS NULL;
+  ```
+- **상태**: ✅ 코드 수정 완료 (커밋: `666a9b9`)
+
+---

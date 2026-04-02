@@ -95,4 +95,10 @@ NEXT_PUBLIC_API_URL=https://pcpricetrack.onrender.com/api
 ```
 - **주의**: 초기 설정 시 `/api` 미포함으로 `Cannot GET /auth/kakao` 오류 발생 → 수정
 
+### [12] 견적 저장/조회 토큰 전달 수정 (버그 수정)
+- **파일**: `apps/web/src/lib/data.ts`
+- **문제**: `saveBuild()`, `fetchSavedBuilds()` 호출 시 JWT 토큰 미전달 → 백엔드 인증 실패
+- **변경 내용**: `localStorage.getItem('token')` 으로 토큰 읽어 API 호출에 포함
+- **커밋**: `666a9b9`
+
 ---

@@ -92,6 +92,22 @@ GOOGLE_CLIENT_SECRET=...
 - **해결**: `UI_NOISE` 정규식으로 잡음 제거 + 팝업 컨테이너 제외 셀렉터 우선 적용
 - **커밋**: `d24451f`
 
+### [13] 견적 저장/조회 유저별 분리 (버그 수정)
+- **파일**: `apps/api/src/modules/builds/builds.controller.ts`, `builds.service.ts`
+- **문제**: `@Public()` 전체 적용 + userId 필터 없음 → 모든 유저 견적이 공개 노출
+- **변경 내용**:
+  - 컨트롤러 클래스 `@Public()` 제거
+  - `estimate`만 `@Public()` 유지 (비로그인 견적 계산 허용)
+  - `save()` → `@CurrentUser()` 로 JWT에서 userId 추출 후 저장
+  - `findAll()`, `findById()` → userId 기준 필터링
+- **커밋**: `666a9b9`
+
+### [14] 11번가 어댑터 상품명 잡음 제거 방식 개선
+- **파일**: `apps/api/src/modules/crawler/adapters/elevenst.adapter.ts`
+- **문제**: `replace()` 방식으로는 "강화 찜 완료..." 처럼 잡음 직전에 실제 텍스트가 붙어있으면 처리 불가
+- **변경 내용**: `split(UI_NOISE_BOUNDARY)[0]` 방식으로 변경 → 첫 번째 잡음 키워드 이전 텍스트만 사용
+- **예시**: `"12핀 강화 찜 완료 찜이 되었습니다..."` → `"12핀 강화"`
+
 ### [12] UptimeRobot 설정
 - **목적**: Render 무료 플랜 슬립(15분) 방지
 - **핑 URL**: `https://pcpricetrack.onrender.com/api/health`

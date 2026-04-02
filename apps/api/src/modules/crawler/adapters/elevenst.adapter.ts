@@ -80,8 +80,9 @@ export class ElevenStAdapter extends BaseSiteAdapter {
       // 1순위: 상품명 전용 span/em 셀렉터 (팝업 컨테이너 제외)
       // 2순위: .c_product_info_title 직계 텍스트 노드만 추출
       // 3순위: innerText에서 UI 잡음 제거
-      const UI_NOISE =
-        /찜하기|공유하기|찜 완료|찜해제 완료|찜이 되었습니다|찜이 취소 되었습니다|찜한상품 전체보기|페이스북|카카오스토리|닫기|복사|\bX\b/g;
+      // UI 잡음이 시작되는 첫 지점에서 잘라냄 (replace보다 안전)
+      const UI_NOISE_BOUNDARY =
+        /찜하기|공유하기|찜 완료|찜해제 완료|찜이 되었습니다|찜이 취소 되었습니다|찜한상품 전체보기|페이스북|카카오스토리|닫기|복사/;
 
       const productName = await page
         .$eval(
@@ -110,7 +111,12 @@ export class ElevenStAdapter extends BaseSiteAdapter {
             },
           ).catch(() => undefined),
         )
-        .then((name) => name?.replace(UI_NOISE, '').replace(/\s+/g, ' ').trim() || undefined);
+        .then((name) => {
+          if (!name) return undefined;
+          // 첫 번째 UI 잡음 키워드 이전 텍스트만 사용
+          const cleaned = name.split(UI_NOISE_BOUNDARY)[0].replace(/\s+/g, ' ').trim();
+          return cleaned || undefined;
+        });
 
       // ── 브랜드 ───────────────────────────────────────────────────────
       // 1순위: 상품명에서 [브랜드] 패턴 추출 (예: "[이엠텍]지포스 RTX 3050")
