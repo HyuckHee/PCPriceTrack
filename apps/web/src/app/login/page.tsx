@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,7 +31,7 @@ export default function LoginPage() {
         isRegister ? '/auth/register' : '/auth/login',
         isRegister ? { email, password, name } : { email, password },
       );
-      localStorage.setItem('token', res.tokens.accessToken);
+      await login(res.tokens.accessToken);
       toast.success(isRegister ? '회원가입이 완료되었습니다!' : '로그인되었습니다!');
       router.push('/products');
     } catch (err) {

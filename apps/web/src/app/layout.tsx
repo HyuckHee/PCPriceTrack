@@ -9,6 +9,8 @@ import { CurrencyToggle } from '@/components/CurrencyToggle';
 import { BuildEstimatorProvider } from '@/context/BuildEstimatorContext';
 import BuildEstimatorButton from '@/components/BuildEstimatorButton';
 import BuildEstimatorPanel from '@/components/BuildEstimatorPanel';
+import { AuthProvider } from '@/context/AuthContext';
+import AuthNav from '@/components/AuthNav';
 import { getUsdToKrw } from '@/lib/exchange-rate';
 import './globals.css';
 
@@ -27,6 +29,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className={`${inter.className} bg-gray-950 text-gray-100 min-h-screen`}>
         <QueryProvider>
         <NuqsAdapter>
+        <AuthProvider>
         <CurrencyProvider usdToKrw={usdToKrw}>
           <BuildEstimatorProvider>
             <header className="border-b border-gray-800 bg-gray-900">
@@ -41,7 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     <Link href="/products" className="hover:text-white transition-colors">상품</Link>
                     <Link href="/deals" className="hover:text-white transition-colors">특가</Link>
                     <Link href="/alerts" className="hover:text-white transition-colors">가격 알림</Link>
-                    <Link href="/login" className="hover:text-white transition-colors">로그인</Link>
+                    <AuthNav />
                   </nav>
                 </div>
               </div>
@@ -53,6 +56,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Toaster theme="dark" position="bottom-right" richColors />
           </BuildEstimatorProvider>
         </CurrencyProvider>
+        </AuthProvider>
         </NuqsAdapter>
         </QueryProvider>
       </body>

@@ -3,22 +3,25 @@
 import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 function AuthCallbackInner() {
   const router = useRouter();
   const params = useSearchParams();
+  const { login } = useAuth();
 
   useEffect(() => {
     const token = params.get('token');
     if (token) {
-      localStorage.setItem('token', token);
-      toast.success('로그인되었습니다!');
-      router.replace('/products');
+      login(token).then(() => {
+        toast.success('로그인되었습니다!');
+        router.replace('/products');
+      });
     } else {
       toast.error('로그인에 실패했습니다.');
       router.replace('/login');
     }
-  }, [params, router]);
+  }, [params, router, login]);
 
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
