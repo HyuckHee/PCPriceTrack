@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { desc, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { Database, DATABASE_TOKEN } from '../../database/database.provider';
 import { pcBuilds } from '../../database/schema/pc-builds';
 import { EstimateBuildDto } from './dto/estimate-build.dto';
@@ -136,19 +136,20 @@ export class BuildsService {
     return build;
   }
 
-  async findAll(limit = 20) {
+  async findAll(limit = 20, userId: string) {
     return this.db
       .select()
       .from(pcBuilds)
+      .where(eq(pcBuilds.userId, userId))
       .orderBy(desc(pcBuilds.createdAt))
       .limit(limit);
   }
 
-  async findById(id: string) {
+  async findById(id: string, userId: string) {
     const [build] = await this.db
       .select()
       .from(pcBuilds)
-      .where(sql`${pcBuilds.id} = ${id}`)
+      .where(and(eq(pcBuilds.id, id), eq(pcBuilds.userId, userId)))
       .limit(1);
     return build ?? null;
   }

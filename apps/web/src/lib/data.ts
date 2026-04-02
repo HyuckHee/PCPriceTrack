@@ -193,22 +193,18 @@ export async function saveBuild(
   totalPrice: number,
   components: BuildComponent[],
 ): Promise<SavedBuild | null> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') ?? undefined : undefined;
   try {
-    return await api.post<SavedBuild>('/builds', {
-      name,
-      budget,
-      currency,
-      totalPrice,
-      components,
-    });
+    return await api.post<SavedBuild>('/builds', { name, budget, currency, totalPrice, components }, token);
   } catch {
     return null;
   }
 }
 
 export async function fetchSavedBuilds(limit = 20): Promise<SavedBuild[]> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') ?? undefined : undefined;
   try {
-    return await api.get<SavedBuild[]>(`/builds?limit=${limit}`);
+    return await api.get<SavedBuild[]>(`/builds?limit=${limit}`, token);
   } catch {
     return [];
   }
