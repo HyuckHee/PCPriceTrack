@@ -49,11 +49,8 @@ async function bootstrap() {
   app.enableCors({
     origin: nodeEnv === 'production'
       ? (origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => {
-          if (!origin || allowedOrigins.some((o) => origin.startsWith(o))) {
-            cb(null, true);
-          } else {
-            cb(new Error(`CORS: ${origin} not allowed`), false);
-          }
+          const allowed = !origin || allowedOrigins.some((o) => origin.startsWith(o));
+          cb(null, allowed);
         }
       : true,
     credentials: true,
