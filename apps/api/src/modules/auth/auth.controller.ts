@@ -89,4 +89,14 @@ export class AuthController {
     const frontendUrl = this.config.get<string>('oauth.frontendUrl');
     res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}`);
   }
+
+  @Public()
+  @Get('kakao/logout')
+  kakaoLogout(@Res() res: Response) {
+    const clientId = this.config.get<string>('oauth.kakaoClientId') ?? '';
+    const frontendUrl = this.config.get<string>('oauth.frontendUrl');
+    res.redirect(
+      `https://kauth.kakao.com/oauth/logout?client_id=${clientId}&logout_redirect_uri=${frontendUrl}`,
+    );
+  }
 }
