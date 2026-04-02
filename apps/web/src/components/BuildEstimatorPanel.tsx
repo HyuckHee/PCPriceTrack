@@ -48,7 +48,11 @@ export default function BuildEstimatorPanel() {
     setPos(getDefaultPos());
   }, []);
   useEffect(() => {
-    if (isOpen) setPos(getDefaultPos());
+    if (isOpen) {
+      setPos(getDefaultPos());
+      // 패널 열릴 때 저장된 견적 자동 로드
+      loadSavedBuilds();
+    }
   }, [isOpen]);
 
   const onHeaderMouseDown = useCallback(
@@ -116,6 +120,14 @@ export default function BuildEstimatorPanel() {
     setInputValue(String(val));
   }
 
+  async function loadSavedBuilds() {
+    setLoadingSaved(true);
+    const { fetchSavedBuilds } = await import('@/lib/data');
+    const builds = await fetchSavedBuilds(20);
+    setSavedBuilds(builds as typeof savedBuilds);
+    setLoadingSaved(false);
+  }
+
   async function handleEstimate() {
     setLoading(true);
     setEstimate(null);
@@ -132,15 +144,12 @@ export default function BuildEstimatorPanel() {
     const validComponents = estimate.components.filter(Boolean) as BuildComponent[];
     const result = await saveBuild(buildName, estimate.budget, estimate.currency, estimate.totalPrice, validComponents);
     setSaving(false);
-    setSaveMsg(result ? '견적이 저장되었습니다!' : '저장에 실패했습니다.');
-  }
-
-  async function loadSavedBuilds() {
-    setLoadingSaved(true);
-    const { fetchSavedBuilds } = await import('@/lib/data');
-    const builds = await fetchSavedBuilds(20);
-    setSavedBuilds(builds as typeof savedBuilds);
-    setLoadingSaved(false);
+    if (result) {
+      setSaveMsg('견적이 저장되었습니다!');
+      loadSavedBuilds(); // 저장 후 목록 갱신
+    } else {
+      setSaveMsg('저장에 실패했습니다.');
+    }
   }
 
   function handleTabChange(t: 'estimate' | 'saved') {
@@ -191,11 +200,16 @@ export default function BuildEstimatorPanel() {
           <button
             key={t}
             onClick={() => handleTabChange(t)}
-            className={`flex-1 py-2 text-xs font-medium transition-colors cursor-pointer ${
+            className={`flex-1 py-2 text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
               tab === t ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400 hover:text-gray-200'
             }`}
           >
             {t === 'estimate' ? '견적 계산' : '저장된 견적'}
+            {t === 'saved' && savedBuilds.length > 0 && (
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] font-bold leading-none">
+                {savedBuilds.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
