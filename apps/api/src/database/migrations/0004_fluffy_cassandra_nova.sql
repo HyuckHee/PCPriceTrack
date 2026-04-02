@@ -1,0 +1,1 @@
+ALTER TABLE "product_listings" ALTER COLUMN "url" SET DATA TYPE text;

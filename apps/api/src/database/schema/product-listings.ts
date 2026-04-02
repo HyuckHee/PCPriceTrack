@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   pgTable,
+  text,
   timestamp,
   unique,
   uuid,
@@ -22,7 +23,7 @@ export const productListings = pgTable(
       .references(() => stores.id, { onDelete: 'cascade' }),
     // The store's own identifier (ASIN for Amazon, item number for Newegg, etc.)
     externalId: varchar('external_id', { length: 255 }).notNull(),
-    url: varchar('url', { length: 1000 }).notNull(),
+    url: text('url').notNull(),
     isActive: boolean('is_active').notNull().default(true),
     // Tracks when crawler last successfully found this listing
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
