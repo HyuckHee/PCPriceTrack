@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { fetchProducts, fetchCategories, fetchDeals } from '@/lib/data';
 import { ProductCard } from '@/components/ProductCard';
 import { DealCard } from '@/components/DealCard';
+import { ProductFilters } from '@/components/ProductFilters';
 
 export const revalidate = 60;
 
@@ -36,57 +37,7 @@ export default async function ProductsPage({
       </div>
 
       {/* Filters */}
-      <form method="GET" action="/products" className="mb-6 flex flex-wrap gap-3">
-        <input
-          name="search"
-          defaultValue={search}
-          placeholder="상품 검색..."
-          className="flex-1 min-w-48 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
-        />
-        <select
-          name="categoryId"
-          defaultValue={categoryId}
-          className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-        >
-          <option value="">전체 카테고리</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-        <div className="flex items-center gap-2">
-          <input
-            name="minPrice"
-            defaultValue={minPrice}
-            placeholder="최저 금액"
-            type="number"
-            min="0"
-            className="w-24 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-          />
-          <span className="text-gray-500 text-sm">–</span>
-          <input
-            name="maxPrice"
-            defaultValue={maxPrice}
-            placeholder="최고 금액"
-            type="number"
-            min="0"
-            className="w-24 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-          />
-        </div>
-        <button
-          type="submit"
-          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm transition-colors"
-        >
-          검색
-        </button>
-        {(search || categoryId || minPrice || maxPrice) && (
-          <Link
-            href="/products"
-            className="px-4 py-2 rounded-lg text-sm text-gray-400 bg-gray-800 hover:bg-gray-700 transition-colors"
-          >
-            초기화
-          </Link>
-        )}
-      </form>
+      <ProductFilters categories={categories} />
 
       {deals.length > 0 && (
         <div className="mb-8">
