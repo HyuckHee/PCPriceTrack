@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
 interface Alert {
@@ -33,12 +34,14 @@ export default function AlertsPage() {
     const token = localStorage.getItem('token') ?? '';
     await api.delete('/alerts/' + id, token);
     setAlerts((prev) => prev.filter((a) => a.id !== id));
+    toast.success('알림이 삭제되었습니다.');
   }
 
   async function handleDeactivate(id: string) {
     const token = localStorage.getItem('token') ?? '';
     const updated = await api.patch<Alert>('/alerts/' + id + '/deactivate', {}, token);
     setAlerts((prev) => prev.map((a) => (a.id === id ? updated : a)));
+    toast.success('알림이 비활성화되었습니다.');
   }
 
   if (loading) return <p className="text-gray-400">Loading…</p>;

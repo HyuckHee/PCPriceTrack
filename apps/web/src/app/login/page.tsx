@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
 export default function LoginPage() {
@@ -27,9 +28,12 @@ export default function LoginPage() {
         isRegister ? { email, password, name } : { email, password },
       );
       localStorage.setItem('token', res.tokens.accessToken);
+      toast.success(isRegister ? '회원가입이 완료되었습니다!' : '로그인되었습니다!');
       router.push('/products');
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      setError(msg);
+      toast.error(isRegister ? '회원가입에 실패했습니다.' : '로그인에 실패했습니다.', { description: msg });
     } finally {
       setLoading(false);
     }
