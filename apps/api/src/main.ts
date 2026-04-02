@@ -43,16 +43,8 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   // CORS
-  const allowedOrigins = process.env.FRONTEND_URL
-    ? process.env.FRONTEND_URL.split(',').map((o) => o.trim())
-    : [];
   app.enableCors({
-    origin: nodeEnv === 'production'
-      ? (origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => {
-          const allowed = !origin || allowedOrigins.some((o) => origin.startsWith(o));
-          cb(null, allowed);
-        }
-      : true,
+    origin: true,
     credentials: true,
   });
 
