@@ -42,9 +42,20 @@ async function bootstrap() {
   // Global exception filter for consistent error response shape
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // CORS — tighten origins in production
+  // CORS
+  const allowedOrigins = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map((o) => o.trim())
+    : [];
   app.enableCors({
-    origin: nodeEnv === 'production' ? process.env.FRONTEND_URL : true,
+    origin: nodeEnv === 'production'
+      ? (origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => {
+          if (!origin || allowedOrigins.some((o) => origin.startsWith(o))) {
+            cb(null, true);
+          } else {
+            cb(new Error(`CORS: ${origin} not allowed`), false);
+          }
+        }
+      : true,
     credentials: true,
   });
 
