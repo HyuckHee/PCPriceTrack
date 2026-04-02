@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import Link from 'next/link';
 import { Toaster } from 'sonner';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
+import { QueryProvider } from '@/components/QueryProvider';
 import { CurrencyProvider } from '@/context/CurrencyContext';
 import { CurrencyToggle } from '@/components/CurrencyToggle';
 import { BuildEstimatorProvider } from '@/context/BuildEstimatorContext';
@@ -24,6 +25,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="ko">
       <body className={`${inter.className} bg-gray-950 text-gray-100 min-h-screen`}>
+        <QueryProvider>
         <NuqsAdapter>
         <CurrencyProvider usdToKrw={usdToKrw}>
           <BuildEstimatorProvider>
@@ -52,6 +54,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </BuildEstimatorProvider>
         </CurrencyProvider>
         </NuqsAdapter>
+        </QueryProvider>
       </body>
     </html>
   );
