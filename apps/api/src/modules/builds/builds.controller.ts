@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { SafeUser } from '../../database/schema/users';
@@ -33,5 +33,11 @@ export class BuildsController {
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() user: SafeUser) {
     return this.buildsService.findById(id, user.id);
+  }
+
+  /** DELETE /api/builds/:id — 본인 견적 삭제 */
+  @Delete(':id')
+  remove(@Param('id') id: string, @CurrentUser() user: SafeUser) {
+    return this.buildsService.remove(id, user.id);
   }
 }

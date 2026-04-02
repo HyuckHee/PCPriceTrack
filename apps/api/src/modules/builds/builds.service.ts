@@ -153,4 +153,11 @@ export class BuildsService {
       .limit(1);
     return build ?? null;
   }
+
+  async remove(id: string, userId: string) {
+    await this.db
+      .delete(pcBuilds)
+      .where(and(eq(pcBuilds.id, id), eq(pcBuilds.userId, userId)));
+    return { success: true };
+  }
 }

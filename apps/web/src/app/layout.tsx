@@ -7,8 +7,10 @@ import { QueryProvider } from '@/components/QueryProvider';
 import { CurrencyProvider } from '@/context/CurrencyContext';
 import { CurrencyToggle } from '@/components/CurrencyToggle';
 import { BuildEstimatorProvider } from '@/context/BuildEstimatorContext';
+import { BuildDetailSidebarProvider } from '@/context/BuildDetailSidebarContext';
 import BuildEstimatorButton from '@/components/BuildEstimatorButton';
 import BuildEstimatorPanel from '@/components/BuildEstimatorPanel';
+import BuildDetailSidebar from '@/components/BuildDetailSidebar';
 import { AuthProvider } from '@/context/AuthContext';
 import AuthNav from '@/components/AuthNav';
 import { getUsdToKrw } from '@/lib/exchange-rate';
@@ -32,6 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <AuthProvider>
         <CurrencyProvider usdToKrw={usdToKrw}>
           <BuildEstimatorProvider>
+          <BuildDetailSidebarProvider>
             <header className="border-b border-gray-800 bg-gray-900">
               <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
                 <Link href="/" className="font-bold text-lg text-white tracking-tight">
@@ -53,7 +56,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {children}
             </main>
             <BuildEstimatorPanel />
+            <BuildDetailSidebar />
             <Toaster theme="dark" position="bottom-right" richColors />
+          </BuildDetailSidebarProvider>
           </BuildEstimatorProvider>
         </CurrencyProvider>
         </AuthProvider>

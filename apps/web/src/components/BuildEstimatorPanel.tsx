@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { toast } from 'sonner';
 import { useBuildEstimator } from '@/context/BuildEstimatorContext';
+import { useBuildDetailSidebar } from '@/context/BuildDetailSidebarContext';
 import { useCurrency } from '@/context/CurrencyContext';
 import {
   BuildComponent,
@@ -40,6 +41,7 @@ function getDefaultPos() {
 
 export default function BuildEstimatorPanel() {
   const { isOpen, close } = useBuildEstimator();
+  const { openSidebar } = useBuildDetailSidebar();
   const { displayCurrency: currency, usdToKrw } = useCurrency();
 
   // Drag state — initialize with static value to avoid SSR/client mismatch
@@ -355,6 +357,12 @@ export default function BuildEstimatorPanel() {
                       </div>
                     ))}
                   </div>
+                  <button
+                    onClick={() => openSidebar(build)}
+                    className="w-full mt-1 py-1 text-[11px] rounded-md border border-gray-600 text-gray-400 hover:text-white hover:border-gray-400 transition-colors"
+                  >
+                    상세보기 →
+                  </button>
                 </div>
               ))
             )}
