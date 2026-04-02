@@ -28,6 +28,15 @@ export default () => {
       apiKey: env.RESEND_API_KEY,
       from: env.EMAIL_FROM,
     },
+    oauth: {
+      frontendUrl: env.FRONTEND_URL,
+      kakaoClientId: env.KAKAO_CLIENT_ID,
+      kakaoClientSecret: env.KAKAO_CLIENT_SECRET,
+      kakaoCallbackUrl: `${env.API_URL}/api/auth/kakao/callback`,
+      googleClientId: env.GOOGLE_CLIENT_ID,
+      googleClientSecret: env.GOOGLE_CLIENT_SECRET,
+      googleCallbackUrl: `${env.API_URL}/api/auth/google/callback`,
+    },
     crawler: {
       concurrency: env.CRAWLER_CONCURRENCY,
       proxyUrl: env.PROXY_URL,

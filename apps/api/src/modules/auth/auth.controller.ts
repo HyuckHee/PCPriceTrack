@@ -5,18 +5,28 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Req,
+  Res,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { Request, Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { SafeUser } from '../../database/schema/users';
+import { AuthTokens } from './auth.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private config: ConfigService,
+  ) {}
 
   @Public()
   @Post('register')
@@ -48,5 +58,35 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: SafeUser) {
     return user;
+  }
+
+  // ── Google OAuth ──────────────────────────────────────────────
+  @Public()
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  googleAuth() {}
+
+  @Public()
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  googleCallback(@Req() req: Request, @Res() res: Response) {
+    const { tokens } = req.user as { user: SafeUser; tokens: AuthTokens };
+    const frontendUrl = this.config.get<string>('oauth.frontendUrl');
+    res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}`);
+  }
+
+  // ── Kakao OAuth ───────────────────────────────────────────────
+  @Public()
+  @Get('kakao')
+  @UseGuards(AuthGuard('kakao'))
+  kakaoAuth() {}
+
+  @Public()
+  @Get('kakao/callback')
+  @UseGuards(AuthGuard('kakao'))
+  kakaoCallback(@Req() req: Request, @Res() res: Response) {
+    const { tokens } = req.user as { user: SafeUser; tokens: AuthTokens };
+    const frontendUrl = this.config.get<string>('oauth.frontendUrl');
+    res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}`);
   }
 }

@@ -27,6 +27,14 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().optional(),
 
+  // OAuth
+  FRONTEND_URL: z.string().default('http://localhost:3000'),
+  API_URL: z.string().default('http://localhost:3001'),
+  KAKAO_CLIENT_ID: z.string().optional(),
+  KAKAO_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+
   // Crawler
   CRAWLER_CONCURRENCY: z.coerce.number().default(3),
   PROXY_URL: z.string().optional(),

@@ -44,6 +44,7 @@ export class AuthService {
     const user = await this.usersService.findByEmail(email);
     if (!user) throw new UnauthorizedException('Invalid credentials');
 
+    if (!user.passwordHash) throw new UnauthorizedException('Invalid credentials');
     const passwordMatch = await bcrypt.compare(password, user.passwordHash);
     if (!passwordMatch) throw new UnauthorizedException('Invalid credentials');
 
@@ -53,6 +54,9 @@ export class AuthService {
       name: user.name,
       role: user.role,
       isVerified: user.isVerified,
+      provider: user.provider,
+      providerId: user.providerId,
+      avatarUrl: user.avatarUrl,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
@@ -72,6 +76,39 @@ export class AuthService {
     const tokens = await this.generateTokens(user.id, user.email);
     await this.saveRefreshTokenHash(user.id, tokens.refreshToken);
     return tokens;
+  }
+
+  async socialLogin(data: {
+    provider: string;
+    providerId: string;
+    email?: string;
+    name?: string;
+    avatarUrl?: string;
+  }): Promise<{ user: SafeUser; tokens: AuthTokens }> {
+    let user = await this.usersService.findByProvider(data.provider, data.providerId);
+
+    if (!user) {
+      if (data.email) {
+        const existing = await this.usersService.findByEmail(data.email);
+        if (existing) {
+          await this.usersService.linkProvider(existing.id, data.provider, data.providerId, data.avatarUrl);
+          user = existing as unknown as SafeUser;
+        }
+      }
+      if (!user) {
+        user = await this.usersService.createOAuth({
+          email: data.email ?? `${data.provider}_${data.providerId}@oauth.local`,
+          name: data.name,
+          provider: data.provider,
+          providerId: data.providerId,
+          avatarUrl: data.avatarUrl,
+        });
+      }
+    }
+
+    const tokens = await this.generateTokens(user.id, user.email);
+    await this.saveRefreshTokenHash(user.id, tokens.refreshToken);
+    return { user, tokens };
   }
 
   async logout(userId: string): Promise<void> {
