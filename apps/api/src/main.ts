@@ -4,8 +4,23 @@ import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { Pool } from 'pg';
+import * as path from 'path';
+
+async function runMigrations() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) return;
+  const pool = new Pool({ connectionString: databaseUrl, ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false });
+  const db = drizzle(pool);
+  await migrate(db, { migrationsFolder: path.join(__dirname, 'database/migrations') });
+  await pool.end();
+  console.log('Migrations complete.');
+}
 
 async function bootstrap() {
+  await runMigrations();
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
   // Structured logging
