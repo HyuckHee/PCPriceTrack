@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Link from 'next/link';
+import { Toaster } from 'sonner';
 import { CurrencyProvider } from '@/context/CurrencyContext';
 import { CurrencyToggle } from '@/components/CurrencyToggle';
 import { BuildEstimatorProvider } from '@/context/BuildEstimatorContext';
@@ -45,6 +46,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {children}
             </main>
             <BuildEstimatorPanel />
+            <Toaster theme="dark" position="bottom-right" richColors />
           </BuildEstimatorProvider>
         </CurrencyProvider>
       </body>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import { toast } from 'sonner';
 import { useBuildEstimator } from '@/context/BuildEstimatorContext';
 import { useCurrency } from '@/context/CurrencyContext';
 import {
@@ -11,6 +12,9 @@ import {
   saveBuild,
 } from '@/lib/data';
 import { convertPrice, formatPrice } from '@/lib/format';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 
 const CATEGORY_ORDER = ['gpu', 'cpu', 'ram', 'ssd'];
 const CATEGORY_ICONS: Record<string, string> = {
@@ -88,7 +92,6 @@ export default function BuildEstimatorPanel() {
   const [estimate, setEstimate] = useState<BuildEstimate | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [buildName, setBuildName] = useState('나의 조립 PC');
   const [tab, setTab] = useState<'estimate' | 'saved'>('estimate');
   const [savedBuilds, setSavedBuilds] = useState<
@@ -131,7 +134,6 @@ export default function BuildEstimatorPanel() {
   async function handleEstimate() {
     setLoading(true);
     setEstimate(null);
-    setSaveMsg(null);
     const result = await fetchBuildEstimate(budget, currency);
     setEstimate(result);
     setLoading(false);
@@ -140,15 +142,14 @@ export default function BuildEstimatorPanel() {
   async function handleSave() {
     if (!estimate) return;
     setSaving(true);
-    setSaveMsg(null);
     const validComponents = estimate.components.filter(Boolean) as BuildComponent[];
     const result = await saveBuild(buildName, estimate.budget, estimate.currency, estimate.totalPrice, validComponents);
     setSaving(false);
     if (result) {
-      setSaveMsg('견적이 저장되었습니다!');
-      loadSavedBuilds(); // 저장 후 목록 갱신
+      toast.success('견적이 저장되었습니다!');
+      loadSavedBuilds();
     } else {
-      setSaveMsg('저장에 실패했습니다.');
+      toast.error('저장에 실패했습니다.');
     }
   }
 
@@ -194,30 +195,25 @@ export default function BuildEstimatorPanel() {
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-gray-700 shrink-0">
-        {(['estimate', 'saved'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => handleTabChange(t)}
-            className={`flex-1 py-2 text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-              tab === t ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            {t === 'estimate' ? '견적 계산' : '저장된 견적'}
-            {t === 'saved' && savedBuilds.length > 0 && (
-              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] font-bold leading-none">
-                {savedBuilds.length}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto overscroll-contain">
-        {tab === 'estimate' ? (
-          <div className="p-4 space-y-3">
+        <Tabs value={tab} onValueChange={(v) => handleTabChange(v as 'estimate' | 'saved')} className="flex flex-col h-full">
+          <TabsList className="w-full rounded-none border-b border-gray-700 bg-transparent h-auto p-0 shrink-0">
+            <TabsTrigger value="estimate" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent data-[state=active]:text-blue-400 py-2 text-xs">
+              견적 계산
+            </TabsTrigger>
+            <TabsTrigger value="saved" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent data-[state=active]:text-blue-400 py-2 text-xs gap-1.5">
+              저장된 견적
+              {savedBuilds.length > 0 && (
+                <Badge variant="default" className="w-4 h-4 p-0 flex items-center justify-center text-[10px] rounded-full">
+                  {savedBuilds.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="estimate" className="mt-0 flex-1">
+        <div className="p-4 space-y-3">
             {/* Budget input */}
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1.5">
@@ -232,28 +228,26 @@ export default function BuildEstimatorPanel() {
               />
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {presets.map((p) => (
-                  <button
+                  <Button
                     key={p}
+                    size="sm"
+                    variant={budget === p ? 'default' : 'preset'}
                     onClick={() => handlePreset(p)}
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-                      budget === p
-                        ? 'bg-blue-600 border-blue-600 text-white'
-                        : 'border-gray-600 text-gray-400 hover:border-gray-400 hover:text-gray-200'
-                    }`}
+                    className="rounded-full h-6 text-xs px-2.5"
                   >
                     {currency === 'KRW' ? `${(p / 10000).toFixed(0)}만` : `$${p.toLocaleString()}`}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
 
-            <button
+            <Button
               onClick={handleEstimate}
               disabled={loading || budget < 100}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-lg transition-colors text-sm cursor-pointer"
+              className="w-full"
             >
               {loading ? '계산 중...' : '견적 계산하기'}
-            </button>
+            </Button>
 
             {/* Results */}
             {estimate && (
@@ -316,18 +310,14 @@ export default function BuildEstimatorPanel() {
                     placeholder="견적 이름"
                     className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
                   />
-                  <button
+                  <Button
                     onClick={handleSave}
                     disabled={saving}
-                    className="w-full bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white font-semibold py-2 rounded-lg text-xs transition-colors cursor-pointer"
+                    className="w-full bg-green-700 hover:bg-green-600 text-white text-xs"
+                    size="sm"
                   >
                     {saving ? '저장 중...' : '💾 이 견적 저장하기'}
-                  </button>
-                  {saveMsg && (
-                    <p className={`text-xs text-center ${saveMsg.includes('실패') ? 'text-red-400' : 'text-green-400'}`}>
-                      {saveMsg}
-                    </p>
-                  )}
+                  </Button>
                 </div>
               </div>
             )}
@@ -338,7 +328,9 @@ export default function BuildEstimatorPanel() {
               </p>
             )}
           </div>
-        ) : (
+          </TabsContent>
+
+          <TabsContent value="saved" className="mt-0 flex-1">
           <div className="p-4 space-y-2">
             {loadingSaved ? (
               <p className="text-center py-6 text-gray-500 text-xs">불러오는 중...</p>
@@ -367,7 +359,8 @@ export default function BuildEstimatorPanel() {
               ))
             )}
           </div>
-        )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

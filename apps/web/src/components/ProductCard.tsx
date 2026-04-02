@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCurrency } from '@/context/CurrencyContext';
 import { formatPrice, formatPriceShort, convertPrice, extractSpecBadges } from '@/lib/format';
+import { Badge } from '@/components/ui/badge';
 
 interface Product {
   id: string;
@@ -38,7 +39,7 @@ export function ProductCard({ p }: { p: Product }) {
           이미지 없음
         </div>
       )}
-      <div className="text-xs text-blue-400 mb-1">{p.category.name}</div>
+      <Badge variant="category" className="mb-1 w-fit">{p.category.name}</Badge>
       <div className="text-sm font-semibold text-gray-200 mb-0.5">{p.brand}</div>
       <div className="text-xs text-gray-400 leading-snug line-clamp-2 flex-1">{p.name}</div>
       {(() => {
@@ -46,12 +47,7 @@ export function ProductCard({ p }: { p: Product }) {
         return badges.length > 0 ? (
           <div className="flex flex-wrap gap-1 mt-2">
             {badges.map((b) => (
-              <span
-                key={b}
-                className="text-xs bg-gray-800 border border-gray-700 text-gray-300 px-1.5 py-0.5 rounded"
-              >
-                {b}
-              </span>
+              <Badge key={b} variant="secondary">{b}</Badge>
             ))}
           </div>
         ) : null;
@@ -96,13 +92,9 @@ export function ProductCard({ p }: { p: Product }) {
                   )}
                 </div>
                 {drop && (
-                  <span
-                    className={`text-white text-xs font-bold px-1.5 py-0.5 rounded ${
-                      drop >= 20 ? 'bg-red-600' : drop >= 10 ? 'bg-orange-600' : 'bg-yellow-600'
-                    }`}
-                  >
+                  <Badge variant={drop >= 20 ? 'destructive' : drop >= 10 ? 'warning' : 'caution'}>
                     -{drop}%
-                  </span>
+                  </Badge>
                 )}
               </div>
               {savings && (
@@ -111,12 +103,7 @@ export function ProductCard({ p }: { p: Product }) {
               {p.storeNames && (
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   {p.storeNames.split(', ').map((store) => (
-                    <span
-                      key={store}
-                      className="text-xs text-gray-500 bg-gray-800/60 border border-gray-700/50 px-1.5 py-0.5 rounded"
-                    >
-                      {store}
-                    </span>
+                    <Badge key={store} variant="store">{store}</Badge>
                   ))}
                 </div>
               )}
