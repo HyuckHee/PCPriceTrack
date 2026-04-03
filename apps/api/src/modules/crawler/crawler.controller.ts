@@ -12,6 +12,7 @@ import {
 import { Public } from '../../common/decorators/public.decorator';
 import { IsBoolean, IsString, IsUUID, IsArray } from 'class-validator';
 import { CrawlerService } from './crawler.service';
+import { CrawlerScheduleService } from './services/crawler-schedule.service';
 import { AdminKeyGuard } from '../../common/guards/admin-key.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 
@@ -33,6 +34,11 @@ class ToggleStoreDto {
   @IsBoolean() isActive!: boolean;
 }
 
+class UpdateScheduleDto {
+  @IsString() key!: string;
+  @IsString() cronExpr!: string;
+}
+
 /**
  * Admin-only crawler management endpoints.
  * x-admin-key 헤더로 인증 (JWT 불필요).
@@ -41,7 +47,10 @@ class ToggleStoreDto {
 @Controller('admin/crawler')
 @UseGuards(AdminKeyGuard)
 export class CrawlerController {
-  constructor(private readonly crawlerService: CrawlerService) {}
+  constructor(
+    private readonly crawlerService: CrawlerService,
+    private readonly scheduleService: CrawlerScheduleService,
+  ) {}
 
   /** GET /api/admin/crawler/status — all store statuses + circuit breaker states */
   @Get('status')
@@ -117,5 +126,27 @@ export class CrawlerController {
   async resetCircuit(@Param('storeId', ParseUuidPipe) storeId: string) {
     await this.crawlerService.resetCircuit(storeId);
     return { message: `Circuit breaker reset for store ${storeId}` };
+  }
+
+  /** GET /api/admin/crawler/schedules — 현재 스케줄 설정 조회 */
+  @Get('schedules')
+  async getSchedules() {
+    return this.scheduleService.getSchedules();
+  }
+
+  /** PATCH /api/admin/crawler/schedules — 스케줄 업데이트 */
+  @Patch('schedules')
+  @HttpCode(HttpStatus.OK)
+  async updateSchedule(@Body() body: UpdateScheduleDto) {
+    const result = await this.scheduleService.updateSchedule(body.key, body.cronExpr);
+    return { message: `스케줄 업데이트 완료: ${body.key}`, ...result };
+  }
+
+  /** POST /api/admin/crawler/schedules/:key/reset — 스케줄 기본값으로 리셋 */
+  @Post('schedules/:key/reset')
+  @HttpCode(HttpStatus.OK)
+  async resetSchedule(@Param('key') key: string) {
+    const result = await this.scheduleService.resetSchedule(key);
+    return { message: `스케줄 기본값으로 리셋: ${key}`, ...result };
   }
 }

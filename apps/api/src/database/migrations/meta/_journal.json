@@ -36,6 +36,13 @@
       "when": 1775125908776,
       "tag": "0004_fluffy_cassandra_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775211235554,
+      "tag": "0005_parched_meteorite",
+      "breakpoints": true
     }
   ]
 }

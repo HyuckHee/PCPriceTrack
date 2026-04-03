@@ -9,6 +9,7 @@ import { CrawlerController } from './crawler.controller';
 import { AdapterFactory } from './adapters/adapter.factory';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { PriceIngestionService } from './services/price-ingestion.service';
+import { CrawlerScheduleService } from './services/crawler-schedule.service';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { PriceIngestionService } from './services/price-ingestion.service';
     AdapterFactory,
     CircuitBreakerService,
     PriceIngestionService,
+    CrawlerScheduleService,
   ],
   exports: [CrawlerService],
 })
