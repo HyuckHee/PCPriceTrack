@@ -20,15 +20,15 @@ export class CrawlerScheduler {
 
   constructor(private readonly crawlerService: CrawlerService) {}
 
-  /** GPU & CPU — every 30 minutes */
-  @Cron('0 */30 * * * *')
+  /** GPU & CPU — every 3 hours (Upstash 무료 플랜 절약) */
+  @Cron('0 0 */3 * * *')
   async scheduleHighVolatilityCrawl(): Promise<void> {
     this.logger.log('Cron: enqueuing GPU/CPU crawl');
     await this.crawlerService.enqueueAllStores({ triggeredBy: 'cron', note: 'high-volatility' });
   }
 
-  /** RAM & SSD — every 2 hours */
-  @Cron('0 0 */2 * * *')
+  /** RAM & SSD — every 8 hours */
+  @Cron('0 0 */8 * * *')
   async scheduleMediumVolatilityCrawl(): Promise<void> {
     this.logger.log('Cron: enqueuing RAM/SSD crawl');
     await this.crawlerService.enqueueAllStores({ triggeredBy: 'cron', note: 'medium-volatility' });
