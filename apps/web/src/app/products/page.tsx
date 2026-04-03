@@ -33,7 +33,7 @@ export default async function ProductsPage({
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">상품</h1>
-        <span className="text-gray-400 text-sm">{meta.total}개 상품</span>
+        <span className="text-gray-300 text-sm">{meta.total}개 상품</span>
       </div>
 
       {/* Filters */}
@@ -61,7 +61,7 @@ export default async function ProductsPage({
       )}
 
       {products.length === 0 ? (
-        <p className="text-gray-400">검색 결과가 없습니다.</p>
+        <p className="text-gray-300">검색 결과가 없습니다.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {products.map((p) => (
@@ -79,7 +79,7 @@ export default async function ProductsPage({
               className={`px-3 py-1 rounded text-sm ${
                 p === meta.page
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
               }`}
             >
               {p}

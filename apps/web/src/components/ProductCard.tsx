@@ -25,7 +25,7 @@ export function ProductCard({ p }: { p: Product }) {
   return (
     <Link
       href={`/products/${p.slug}`}
-      className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition-colors flex flex-col"
+      className="bg-gray-800 border border-gray-700 rounded-xl p-4 hover:border-gray-500 transition-colors flex flex-col"
     >
       {p.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -35,13 +35,13 @@ export function ProductCard({ p }: { p: Product }) {
           className="w-full h-32 object-contain mb-3 rounded"
         />
       ) : (
-        <div className="w-full h-32 bg-gray-800 rounded mb-3 flex items-center justify-center text-gray-600 text-xs">
+        <div className="w-full h-32 bg-gray-700 rounded mb-3 flex items-center justify-center text-gray-400 text-xs">
           이미지 없음
         </div>
       )}
       <Badge variant="category" className="mb-1 w-fit">{p.category.name}</Badge>
-      <div className="text-sm font-semibold text-gray-200 mb-0.5">{p.brand}</div>
-      <div className="text-xs text-gray-400 leading-snug line-clamp-2 flex-1">{p.name}</div>
+      <div className="text-sm font-semibold text-gray-100 mb-0.5">{p.brand}</div>
+      <div className="text-xs text-gray-300 leading-snug line-clamp-2 flex-1">{p.name}</div>
       {(() => {
         const badges = extractSpecBadges(p.name, p.category.name);
         return badges.length > 0 ? (
@@ -67,11 +67,11 @@ export function ProductCard({ p }: { p: Product }) {
           const drop = savings && prev ? Math.round((savings / prev) * 100) : null;
 
           return (
-            <div className="mt-3 pt-3 border-t border-gray-800 space-y-1">
+            <div className="mt-3 pt-3 border-t border-gray-700 space-y-1">
               {listPrice && (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-500">정가</span>
-                  <span className="text-xs text-gray-500 line-through">
+                  <span className="text-xs text-gray-400">정가</span>
+                  <span className="text-xs text-gray-400 line-through">
                     {formatPrice(listPrice, displayCurrency)}
                   </span>
                   {displayCurrency === 'KRW' && (
@@ -83,10 +83,10 @@ export function ProductCard({ p }: { p: Product }) {
               )}
               <div className="flex items-center gap-2 flex-wrap">
                 <div>
-                  <span className="text-xs text-gray-500">최저 </span>
+                  <span className="text-xs text-gray-400">최저 </span>
                   <span className="text-green-400 font-bold">{formatPrice(current, displayCurrency)}</span>
                   {displayCurrency === 'KRW' && (
-                    <span className="text-xs text-gray-500 ml-1">
+                    <span className="text-xs text-gray-400 ml-1">
                       ({formatPriceShort(current, displayCurrency)})
                     </span>
                   )}

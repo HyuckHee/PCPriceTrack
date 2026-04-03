@@ -33,7 +33,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="ko">
-      <body className={`${inter.className} bg-gray-950 text-gray-100 min-h-screen`}>
+      <body className={`${inter.className} bg-gray-900 text-gray-100 min-h-screen`}>
         <QueryProvider>
         <NuqsAdapter>
         <AuthProvider>
@@ -41,13 +41,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <BuildEstimatorProvider>
           <BuildDetailSidebarProvider>
             <header className="border-b border-gray-800 bg-gray-900">
-              <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+              <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
                 <Link href="/" className="flex items-center shrink-0">
                   <Image
                     src="/logo.svg"
                     alt="PCPriceTrack"
-                    width={160}
-                    height={52}
+                    width={208}
+                    height={68}
                     className="object-contain"
                     priority
                   />
