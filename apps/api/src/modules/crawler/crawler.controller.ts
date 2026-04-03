@@ -5,11 +5,12 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import { Public } from '../../common/decorators/public.decorator';
-import { IsString, IsUUID, IsArray } from 'class-validator';
+import { IsBoolean, IsString, IsUUID, IsArray } from 'class-validator';
 import { CrawlerService } from './crawler.service';
 import { AdminKeyGuard } from '../../common/guards/admin-key.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
@@ -26,6 +27,10 @@ class TriggerTargetedDto {
 class TriggerDiscoveryDto {
   @IsUUID() storeId!: string;
   @IsString() categorySlug!: string;
+}
+
+class ToggleStoreDto {
+  @IsBoolean() isActive!: boolean;
 }
 
 /**
@@ -90,6 +95,20 @@ export class CrawlerController {
       { triggeredBy: 'manual' },
     );
     return { message: 'Discovery job enqueued', ...result };
+  }
+
+  /** PATCH /api/admin/crawler/stores/:storeId/toggle — enable or disable a store */
+  @Patch('stores/:storeId/toggle')
+  @HttpCode(HttpStatus.OK)
+  async toggleStore(
+    @Param('storeId', ParseUuidPipe) storeId: string,
+    @Body() body: ToggleStoreDto,
+  ) {
+    const result = await this.crawlerService.toggleStore(storeId, body.isActive);
+    return {
+      message: `Store ${storeId} is now ${result.isActive ? 'active' : 'inactive'}`,
+      ...result,
+    };
   }
 
   /** POST /api/admin/crawler/circuit/:storeId/reset — reset a store's circuit breaker */

@@ -220,6 +220,19 @@ export class CrawlerService {
   }
 
   /**
+   * Toggle a store's isActive flag.
+   */
+  async toggleStore(storeId: string, isActive: boolean): Promise<{ storeId: string; isActive: boolean }> {
+    await this.db
+      .update(stores)
+      .set({ isActive, updatedAt: new Date() })
+      .where(eq(stores.id, storeId));
+
+    this.logger.log(`Store ${storeId} isActive → ${isActive}`);
+    return { storeId, isActive };
+  }
+
+  /**
    * Manually reset a store's circuit breaker (admin action).
    */
   async resetCircuit(storeId: string): Promise<void> {
