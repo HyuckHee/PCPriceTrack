@@ -42,16 +42,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <BuildDetailSidebarProvider>
             <header className="border-b border-gray-800 bg-gray-900">
               <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-                <Link href="/" className="flex items-center gap-2.5 shrink-0">
+                <Link href="/" className="flex items-center shrink-0">
                   <Image
                     src="/logo.svg"
                     alt="PCPriceTrack"
-                    width={36}
-                    height={36}
-                    className="rounded-md object-contain"
+                    width={120}
+                    height={48}
+                    className="object-contain"
                     priority
                   />
-                  <span className="font-bold text-lg text-white tracking-tight">PCPriceTrack</span>
                 </Link>
                 <div className="flex items-center gap-3">
                   <BuildEstimatorButton />
