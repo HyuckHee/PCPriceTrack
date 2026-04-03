@@ -38,6 +38,10 @@ const envSchema = z.object({
   // Crawler
   CRAWLER_CONCURRENCY: z.coerce.number().default(3),
   PROXY_URL: z.string().optional(),
+
+  // Naver Shopping API
+  NAVER_CLIENT_ID: z.string().optional(),
+  NAVER_CLIENT_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

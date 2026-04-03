@@ -10,7 +10,7 @@ import { AmazonAdapter } from './amazon.adapter';
 import { CoupangAdapter } from './coupang.adapter';
 import { ElevenStAdapter } from './elevenst.adapter';
 import { GmarketAdapter } from './gmarket.adapter';
-import { NaverShoppingAdapter } from './naver-shopping.adapter';
+import { NaverShoppingApiAdapter } from './naver-shopping.adapter';
 import { AdapterConfig } from './base.adapter';
 
 @Injectable()
@@ -77,7 +77,15 @@ export class AdapterFactory implements OnModuleInit {
     if (n.includes('coupang') || n.includes('쿠팡')) return new CoupangAdapter(baseConfig);
     if (n.includes('11번가') || n.includes('11st') || n.includes('elevenst')) return new ElevenStAdapter(baseConfig);
     if (n.includes('gmarket') || n.includes('g마켓')) return new GmarketAdapter(baseConfig);
-    if (n.includes('naver') || n.includes('네이버')) return new NaverShoppingAdapter(baseConfig);
+    if (n.includes('naver') || n.includes('네이버')) {
+      const clientId = this.config.get<string>('NAVER_CLIENT_ID');
+      const clientSecret = this.config.get<string>('NAVER_CLIENT_SECRET');
+      if (!clientId || !clientSecret) {
+        this.logger.warn(`네이버쇼핑 API 키 미설정 (NAVER_CLIENT_ID / NAVER_CLIENT_SECRET) — 어댑터 건너뜀`);
+        return null;
+      }
+      return new NaverShoppingApiAdapter({ storeId, storeName, clientId, clientSecret });
+    }
 
     return null;
   }
