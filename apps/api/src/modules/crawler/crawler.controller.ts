@@ -9,22 +9,23 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Public } from '../../common/decorators/public.decorator';
+import { IsString, IsUUID, IsArray } from 'class-validator';
 import { CrawlerService } from './crawler.service';
 import { AdminKeyGuard } from '../../common/guards/admin-key.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 
 class TriggerStoreDto {
-  storeId!: string;
+  @IsUUID() storeId!: string;
 }
 
 class TriggerTargetedDto {
-  storeId!: string;
-  listingIds!: string[];
+  @IsUUID() storeId!: string;
+  @IsArray() @IsString({ each: true }) listingIds!: string[];
 }
 
 class TriggerDiscoveryDto {
-  storeId!: string;
-  categorySlug!: string;
+  @IsUUID() storeId!: string;
+  @IsString() categorySlug!: string;
 }
 
 /**
