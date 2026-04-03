@@ -8,9 +8,9 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Public } from '../../common/decorators/public.decorator';
 import { CrawlerService } from './crawler.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard, Roles } from '../../common/guards/roles.guard';
+import { AdminKeyGuard } from '../../common/guards/admin-key.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 
 class TriggerStoreDto {
@@ -29,11 +29,11 @@ class TriggerDiscoveryDto {
 
 /**
  * Admin-only crawler management endpoints.
- * All routes require `admin` role.
+ * x-admin-key 헤더로 인증 (JWT 불필요).
  */
+@Public()
 @Controller('admin/crawler')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('admin')
+@UseGuards(AdminKeyGuard)
 export class CrawlerController {
   constructor(private readonly crawlerService: CrawlerService) {}
 
