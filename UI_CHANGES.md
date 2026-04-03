@@ -101,4 +101,21 @@ NEXT_PUBLIC_API_URL=https://pcpricetrack.onrender.com/api
 - **변경 내용**: `localStorage.getItem('token')` 으로 토큰 읽어 API 호출에 포함
 - **커밋**: `666a9b9`
 
+### [13] auth/callback 페이지 AuthContext 연동
+- **파일**: `apps/web/src/app/auth/callback/page.tsx`
+- **변경 내용**:
+  - `AuthCallbackInner` 컴포넌트 분리 + `<Suspense>` 래핑
+  - `useAuth().login(token)` 호출로 전역 인증 상태 즉시 반영
+- **커밋**: 자동 수정
+
+### [14] 견적 상세 사이드바 구현
+- **신규 파일**:
+  - `apps/web/src/context/BuildDetailSidebarContext.tsx` — 선택된 견적 전역 상태
+  - `apps/web/src/components/BuildDetailSidebar.tsx` — 우측 슬라이드 사이드바
+- **변경 파일**:
+  - `apps/web/src/app/layout.tsx` — `BuildDetailSidebarProvider`, `BuildDetailSidebar` 추가
+  - `apps/web/src/components/BuildEstimatorPanel.tsx` — 저장된 견적에 "상세보기 →" 버튼 추가
+- **사이드바 기능**: 부품 카드(이미지·가격·쇼핑몰 링크), 예산/총액, 삭제 버튼
+- **커밋**: `93c291c`
+
 ---
