@@ -23,8 +23,8 @@ export const metadata: Metadata = {
   title: 'PCPriceTrack - 조립 PC 견적 & 특가 정보',
   description: 'PC 부품 최저가 비교 사이트',
   icons: {
-    icon: '/logo.svg',
-    apple: '/logo.svg',
+    icon: '/logo_no_text.svg',
+    apple: '/logo_no_text.svg',
   },
 };
 
@@ -46,8 +46,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <Image
                     src="/logo.svg"
                     alt="PCPriceTrack"
-                    width={120}
-                    height={48}
+                    width={160}
+                    height={52}
                     className="object-contain"
                     priority
                   />
