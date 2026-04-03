@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="80" height="80">
+  <defs>
+    <style>
+      /* 빠른 회전 애니메이션 (외부 트랙) */
+      .spinner {
+        transform-origin: 50px 50px;
+        animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+      /* 느린 역방향 회전 (내부 점선 트랙) */
+      .spinner-inner {
+        transform-origin: 50px 50px;
+        animation: spin-reverse 4s linear infinite;
+      }
+      /* 중앙 CPU 코어 깜빡임 (프로세싱 효과) */
+      .core-pulse {
+        animation: pulse 1s ease-in-out infinite alternate;
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      @keyframes spin-reverse {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(-360deg); }
+      }
+      @keyframes pulse {
+        0% { opacity: 0.6; fill: #1f4e79; }
+        100% { opacity: 1; fill: #F28500; }
+      }
+    </style>
+  </defs>
+
+  <circle cx="50" cy="50" r="42" fill="none" stroke="#e9ecef" stroke-width="4" />
+
+  <circle cx="50" cy="50" r="42" fill="none" stroke="#F28500" stroke-width="4" stroke-linecap="round" stroke-dasharray="80 200" class="spinner" />
+
+  <circle cx="50" cy="50" r="32" fill="none" stroke="#1f4e79" stroke-width="1.5" stroke-dasharray="4 8" class="spinner-inner" />
+
+  <g transform="translate(38, 38)">
+    <rect x="0" y="0" width="24" height="24" rx="3" fill="#ffffff" stroke="#1f4e79" stroke-width="2"/>
+    
+    <rect x="6" y="6" width="12" height="12" rx="1.5" class="core-pulse"/>
+    
+    <path d="M 5,-3 v3 M 12,-3 v3 M 19,-3 v3
+             M 5,24 v3 M 12,24 v3 M 19,24 v3
+             M -3,5 h3 M -3,12 h3 M -3,19 h3
+             M 24,5 h3 M 24,12 h3 M 24,19 h3"
+          stroke="#1f4e79" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
+</svg>
