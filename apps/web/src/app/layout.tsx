@@ -23,8 +23,8 @@ export const metadata: Metadata = {
   title: 'PCPriceTrack - 조립 PC 견적 & 특가 정보',
   description: 'PC 부품 최저가 비교 사이트',
   icons: {
-    icon: '/logo_no_text.svg',
-    apple: '/logo_no_text.svg',
+    icon: '/logo2.png',
+    apple: '/logo2.png',
   },
 };
 
