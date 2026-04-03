@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Toaster } from 'sonner';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { QueryProvider } from '@/components/QueryProvider';
@@ -19,8 +20,12 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'PCPriceTrack',
+  title: 'PCPriceTrack - 조립 PC 견적 & 특가 정보',
   description: 'PC 부품 최저가 비교 사이트',
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -37,8 +42,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <BuildDetailSidebarProvider>
             <header className="border-b border-gray-800 bg-gray-900">
               <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-                <Link href="/" className="font-bold text-lg text-white tracking-tight">
-                  PCPriceTrack
+                <Link href="/" className="flex items-center gap-2.5 shrink-0">
+                  <Image
+                    src="/logo.png"
+                    alt="PCPriceTrack"
+                    width={36}
+                    height={36}
+                    className="rounded-md object-contain"
+                    priority
+                  />
+                  <span className="font-bold text-lg text-white tracking-tight">PCPriceTrack</span>
                 </Link>
                 <div className="flex items-center gap-3">
                   <BuildEstimatorButton />
