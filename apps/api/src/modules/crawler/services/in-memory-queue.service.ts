@@ -63,7 +63,7 @@ export class InMemoryQueueService {
     };
 
     const queuedJob: QueuedJob<T> = {
-      job: job as Job<unknown>,
+      job: job as unknown as Job<unknown>,
       opts: {
         attempts: opts.attempts ?? 1,
         backoff: { delay: opts.backoff?.delay ?? 5000 },
