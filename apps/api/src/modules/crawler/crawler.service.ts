@@ -4,7 +4,7 @@ import { DATABASE_TOKEN, Database } from '../../database/database.provider';
 import { crawlJobs, stores } from '../../database/schema';
 import { AdapterFactory } from './adapters/adapter.factory';
 import { CircuitBreakerService, CircuitState } from './services/circuit-breaker.service';
-import { InMemoryQueueService } from './services/in-memory-queue.service';
+import { QUEUE_SERVICE, IQueueService } from './services/queue.interface';
 import { CRAWL_JOB_OPTIONS, CRAWL_JOB_TYPES, DISCOVERY_CATEGORIES } from './constants';
 import { CrawlJobPayload } from './dto/crawl-job.dto';
 
@@ -29,7 +29,7 @@ export class CrawlerService {
 
   constructor(
     @Inject(DATABASE_TOKEN) private readonly db: Database,
-    private readonly queue: InMemoryQueueService,
+    @Inject(QUEUE_SERVICE) private readonly queue: IQueueService,
     private readonly adapterFactory: AdapterFactory,
     private readonly circuitBreaker: CircuitBreakerService,
   ) {}

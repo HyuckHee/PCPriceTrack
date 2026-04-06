@@ -5,7 +5,8 @@ import { categories, crawlJobs, productListings, products } from '../../database
 import { AdapterFactory } from './adapters/adapter.factory';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { PriceIngestionService } from './services/price-ingestion.service';
-import { InMemoryQueueService, Job } from './services/in-memory-queue.service';
+import { Job } from './services/in-memory-queue.service';
+import { QUEUE_SERVICE, IQueueService } from './services/queue.interface';
 import { CRAWL_JOB_TYPES } from './constants';
 import { CrawlJobPayload, CrawlJobResult } from './dto/crawl-job.dto';
 import { ListingTarget } from './interfaces/adapter.interface';
@@ -19,7 +20,7 @@ export class CrawlerProcessor implements OnModuleInit, OnModuleDestroy {
     private readonly adapterFactory: AdapterFactory,
     private readonly circuitBreaker: CircuitBreakerService,
     private readonly priceIngestion: PriceIngestionService,
-    private readonly queue: InMemoryQueueService,
+    @Inject(QUEUE_SERVICE) private readonly queue: IQueueService,
   ) {}
 
   onModuleInit(): void {

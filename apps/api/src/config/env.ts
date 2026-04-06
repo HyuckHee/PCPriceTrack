@@ -13,6 +13,7 @@ const envSchema = z.object({
   POSTGRES_DB: z.string(),
 
   // Redis
+  REDIS_MODE: z.enum(['disabled', 'local', 'upstash']).default('disabled'),
   REDIS_HOST: z.string().default('localhost'),
   REDIS_PORT: z.coerce.number().default(6379),
   REDIS_PASSWORD: z.string().default(''),

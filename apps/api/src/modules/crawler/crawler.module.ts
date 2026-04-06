@@ -8,13 +8,12 @@ import { AdapterFactory } from './adapters/adapter.factory';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { PriceIngestionService } from './services/price-ingestion.service';
 import { CrawlerScheduleService } from './services/crawler-schedule.service';
-import { InMemoryQueueService } from './services/in-memory-queue.service';
+import { QueueModule } from './services/queue.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot()],
+  imports: [ScheduleModule.forRoot(), QueueModule.register()],
   controllers: [CrawlerController],
   providers: [
-    InMemoryQueueService,
     CrawlerService,
     CrawlerScheduler,
     CrawlerProcessor,
