@@ -3,7 +3,6 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { BullModule } from '@nestjs/bull';
 import { LoggerModule } from 'nestjs-pino';
 import configuration from './config/configuration';
 import { DatabaseModule } from './database/database.module';
@@ -39,17 +38,6 @@ import { HealthController } from './health.controller';
       inject: [ConfigService],
       useFactory: () => ({
         throttlers: [{ ttl: 60_000, limit: 100 }],
-      }),
-    }),
-    BullModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        redis: {
-          host: config.get<string>('redis.host'),
-          port: config.get<number>('redis.port'),
-          password: config.get<string>('redis.password') || undefined,
-          tls: config.get<boolean>('redis.tls') ? { rejectUnauthorized: false } : undefined,
-        },
       }),
     }),
     DatabaseModule,

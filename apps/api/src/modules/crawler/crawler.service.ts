@@ -1,12 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
 import { desc, eq } from 'drizzle-orm';
 import { DATABASE_TOKEN, Database } from '../../database/database.provider';
 import { crawlJobs, stores } from '../../database/schema';
 import { AdapterFactory } from './adapters/adapter.factory';
 import { CircuitBreakerService, CircuitState } from './services/circuit-breaker.service';
-import { CRAWL_JOB_OPTIONS, CRAWL_JOB_TYPES, CRAWL_QUEUE, DISCOVERY_CATEGORIES } from './constants';
+import { InMemoryQueueService } from './services/in-memory-queue.service';
+import { CRAWL_JOB_OPTIONS, CRAWL_JOB_TYPES, DISCOVERY_CATEGORIES } from './constants';
 import { CrawlJobPayload } from './dto/crawl-job.dto';
 
 interface EnqueueOptions {
@@ -30,7 +29,7 @@ export class CrawlerService {
 
   constructor(
     @Inject(DATABASE_TOKEN) private readonly db: Database,
-    @InjectQueue(CRAWL_QUEUE) private readonly crawlQueue: Queue<CrawlJobPayload>,
+    private readonly queue: InMemoryQueueService,
     private readonly adapterFactory: AdapterFactory,
     private readonly circuitBreaker: CircuitBreakerService,
   ) {}
@@ -98,17 +97,17 @@ export class CrawlerService {
       triggeredBy: options.triggeredBy,
     };
 
-    const bullJob = await this.crawlQueue.add(
+    const queueJob = await this.queue.add(
       CRAWL_JOB_TYPES.FULL_STORE,
       payload,
       CRAWL_JOB_OPTIONS[CRAWL_JOB_TYPES.FULL_STORE],
     );
 
     this.logger.log(
-      `Enqueued full crawl for store ${storeId} | crawlJobId=${dbJob.id} | bullJobId=${bullJob.id}`,
+      `Enqueued full crawl for store ${storeId} | crawlJobId=${dbJob.id} | jobId=${queueJob.id}`,
     );
 
-    return { crawlJobId: dbJob.id, bullJobId: bullJob.id };
+    return { crawlJobId: dbJob.id, bullJobId: queueJob.id };
   }
 
   /**
@@ -136,7 +135,7 @@ export class CrawlerService {
       triggeredBy: options.triggeredBy,
     };
 
-    const bullJob = await this.crawlQueue.add(
+    const queueJob = await this.queue.add(
       CRAWL_JOB_TYPES.DISCOVERY,
       payload,
       CRAWL_JOB_OPTIONS[CRAWL_JOB_TYPES.DISCOVERY],
@@ -146,7 +145,7 @@ export class CrawlerService {
       `Enqueued discovery for store ${storeId} | category=${categorySlug} | crawlJobId=${dbJob.id}`,
     );
 
-    return { crawlJobId: dbJob.id, bullJobId: bullJob.id };
+    return { crawlJobId: dbJob.id, bullJobId: queueJob.id };
   }
 
   /**
@@ -178,13 +177,13 @@ export class CrawlerService {
       triggeredBy: options.triggeredBy,
     };
 
-    const bullJob = await this.crawlQueue.add(
+    const queueJob = await this.queue.add(
       CRAWL_JOB_TYPES.TARGETED,
       payload,
       CRAWL_JOB_OPTIONS[CRAWL_JOB_TYPES.TARGETED],
     );
 
-    return { crawlJobId: dbJob.id, bullJobId: bullJob.id };
+    return { crawlJobId: dbJob.id, bullJobId: queueJob.id };
   }
 
   /**
@@ -203,7 +202,7 @@ export class CrawlerService {
         .limit(1);
 
       const circuitData = await this.circuitBreaker.getState(store.id);
-      const queuedCount = await this.crawlQueue.getWaitingCount();
+      const queuedCount = await this.queue.getWaitingCount();
 
       statuses.push({
         storeId: store.id,

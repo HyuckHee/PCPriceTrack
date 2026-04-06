@@ -1,18 +1,17 @@
-import { Inject, Logger, OnModuleDestroy } from '@nestjs/common';
-import { Process, Processor, OnQueueFailed, OnQueueCompleted, OnQueueStalled } from '@nestjs/bull';
-import { Job } from 'bull';
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { and, eq, inArray } from 'drizzle-orm';
 import { DATABASE_TOKEN, Database } from '../../database/database.provider';
 import { categories, crawlJobs, productListings, products } from '../../database/schema';
 import { AdapterFactory } from './adapters/adapter.factory';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { PriceIngestionService } from './services/price-ingestion.service';
-import { CRAWL_QUEUE, CRAWL_JOB_TYPES } from './constants';
+import { InMemoryQueueService, Job } from './services/in-memory-queue.service';
+import { CRAWL_JOB_TYPES } from './constants';
 import { CrawlJobPayload, CrawlJobResult } from './dto/crawl-job.dto';
 import { ListingTarget } from './interfaces/adapter.interface';
 
-@Processor(CRAWL_QUEUE)
-export class CrawlerProcessor implements OnModuleDestroy {
+@Injectable()
+export class CrawlerProcessor implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CrawlerProcessor.name);
 
   constructor(
@@ -20,19 +19,49 @@ export class CrawlerProcessor implements OnModuleDestroy {
     private readonly adapterFactory: AdapterFactory,
     private readonly circuitBreaker: CircuitBreakerService,
     private readonly priceIngestion: PriceIngestionService,
+    private readonly queue: InMemoryQueueService,
   ) {}
 
-  @Process({ name: CRAWL_JOB_TYPES.FULL_STORE, concurrency: 1 })
-  async handleFullStore(job: Job<CrawlJobPayload>): Promise<CrawlJobResult> {
-    return this.processCrawlJob(job);
+  onModuleInit(): void {
+    this.queue.registerHandler<CrawlJobPayload>(CRAWL_JOB_TYPES.FULL_STORE, (job) =>
+      this.processCrawlJob(job),
+    );
+    this.queue.registerHandler<CrawlJobPayload>(CRAWL_JOB_TYPES.TARGETED, (job) =>
+      this.processCrawlJob(job),
+    );
+    this.queue.registerHandler<CrawlJobPayload>(CRAWL_JOB_TYPES.DISCOVERY, (job) =>
+      this.handleDiscovery(job),
+    );
+
+    this.queue.onFailed<CrawlJobPayload>(async (job, err) => {
+      const { crawlJobId, storeId } = job.data;
+      this.logger.error(
+        `Job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts}): ${err.message}`,
+      );
+
+      const isFinalAttempt = job.attemptsMade >= (job.opts.attempts ?? 1);
+      const status = isFinalAttempt ? 'dead' : 'failed';
+
+      await this.updateCrawlJob(crawlJobId, status, {
+        errorLog: `[attempt ${job.attemptsMade}] ${err.message}\n${err.stack ?? ''}`.slice(0, 5000),
+        completedAt: isFinalAttempt ? new Date() : undefined,
+      });
+
+      if (isFinalAttempt) {
+        await this.circuitBreaker.recordFailure(storeId);
+        this.logger.error(
+          `Job ${job.id} moved to dead-letter after ${job.attemptsMade} attempts`,
+        );
+      }
+    });
+
+    this.queue.onCompleted<CrawlJobPayload>((job, result) => {
+      this.logger.debug(
+        `Queue event: job ${job.id} completed — ${JSON.stringify(result)}`,
+      );
+    });
   }
 
-  @Process({ name: CRAWL_JOB_TYPES.TARGETED, concurrency: 3 })
-  async handleTargeted(job: Job<CrawlJobPayload>): Promise<CrawlJobResult> {
-    return this.processCrawlJob(job);
-  }
-
-  @Process({ name: CRAWL_JOB_TYPES.DISCOVERY, concurrency: 1 })
   async handleDiscovery(job: Job<CrawlJobPayload>): Promise<CrawlJobResult> {
     const { crawlJobId, storeId, categorySlug, triggeredBy } = job.data;
 
@@ -237,7 +266,6 @@ export class CrawlerProcessor implements OnModuleDestroy {
       await this.updateCrawlJob(crawlJobId, 'failed', {
         errorLog: 'Circuit breaker OPEN — store temporarily blocked',
       });
-      // Throw so Bull marks it as failed but don't retry immediately
       throw new Error(`Circuit breaker OPEN for store ${storeId}`);
     }
 
@@ -264,7 +292,6 @@ export class CrawlerProcessor implements OnModuleDestroy {
     // ── Ingest results ─────────────────────────────────────────────────────
     let alertsTriggered = 0;
     for (const result of succeeded) {
-      // Find the listingId that matches this result's URL/externalId
       const target = targets.find(
         (t) => t.externalId === result.externalId || t.url === result.url,
       );
@@ -312,54 +339,13 @@ export class CrawlerProcessor implements OnModuleDestroy {
     return result;
   }
 
-  // ── Queue event hooks ──────────────────────────────────────────────────────
-
-  @OnQueueFailed()
-  async onFailed(job: Job<CrawlJobPayload>, err: Error): Promise<void> {
-    const { crawlJobId, storeId } = job.data;
-    this.logger.error(
-      `Job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts}): ${err.message}`,
-    );
-
-    // On final attempt (dead letter) — mark as 'dead'
-    const isFinalAttempt = job.attemptsMade >= (job.opts.attempts ?? 1);
-    const status = isFinalAttempt ? 'dead' : 'failed';
-
-    await this.updateCrawlJob(crawlJobId, status, {
-      errorLog: `[attempt ${job.attemptsMade}] ${err.message}\n${err.stack ?? ''}`.slice(0, 5000),
-      completedAt: isFinalAttempt ? new Date() : undefined,
-    });
-
-    if (isFinalAttempt) {
-      await this.circuitBreaker.recordFailure(storeId);
-      this.logger.error(
-        `Job ${job.id} moved to dead-letter after ${job.attemptsMade} attempts`,
-      );
-    }
-  }
-
-  @OnQueueCompleted()
-  onCompleted(job: Job<CrawlJobPayload>, result: CrawlJobResult): void {
-    this.logger.debug(
-      `Queue event: job ${job.id} completed — ${JSON.stringify(result)}`,
-    );
-  }
-
-  @OnQueueStalled()
-  async onStalled(job: Job<CrawlJobPayload>): Promise<void> {
-    this.logger.warn(`Job ${job.id} stalled — will be retried automatically by Bull`);
-    await this.updateCrawlJob(job.data.crawlJobId, 'pending', {
-      errorLog: 'Job stalled and re-queued',
-    });
-  }
-
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   private async fetchTargets(
     storeId: string,
     listingIds?: string[],
   ): Promise<ListingTarget[]> {
-    const query = this.db
+    const rows = await this.db
       .select({
         listingId: productListings.id,
         url: productListings.url,
@@ -372,9 +358,6 @@ export class CrawlerProcessor implements OnModuleDestroy {
           : eq(productListings.storeId, storeId),
       );
 
-    const rows = await query;
-
-    // Filter out inactive listings in memory (avoids complex query)
     return rows.filter((r) => r.url && r.externalId) as ListingTarget[];
   }
 
@@ -392,15 +375,11 @@ export class CrawlerProcessor implements OnModuleDestroy {
   ): Promise<void> {
     await this.db
       .update(crawlJobs)
-      .set({
-        status,
-        ...extras,
-      })
+      .set({ status, ...extras })
       .where(eq(crawlJobs.id, crawlJobId));
   }
 
   async onModuleDestroy(): Promise<void> {
-    // Clean up Playwright browser instances held by adapters
     const adapters = this.adapterFactory.getAllAdapters();
     await Promise.allSettled(
       adapters.map((adapter) => {

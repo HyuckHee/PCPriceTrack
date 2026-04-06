@@ -1,7 +1,5 @@
 import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
-import { CRAWL_QUEUE } from './constants';
 import { CrawlerProcessor } from './crawler.processor';
 import { CrawlerScheduler } from './crawler.scheduler';
 import { CrawlerService } from './crawler.service';
@@ -10,20 +8,13 @@ import { AdapterFactory } from './adapters/adapter.factory';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { PriceIngestionService } from './services/price-ingestion.service';
 import { CrawlerScheduleService } from './services/crawler-schedule.service';
+import { InMemoryQueueService } from './services/in-memory-queue.service';
 
 @Module({
-  imports: [
-    ScheduleModule.forRoot(),
-    BullModule.registerQueue({
-      name: CRAWL_QUEUE,
-      defaultJobOptions: {
-        removeOnComplete: 50,
-        removeOnFail: 100,
-      },
-    }),
-  ],
+  imports: [ScheduleModule.forRoot()],
   controllers: [CrawlerController],
   providers: [
+    InMemoryQueueService,
     CrawlerService,
     CrawlerScheduler,
     CrawlerProcessor,
