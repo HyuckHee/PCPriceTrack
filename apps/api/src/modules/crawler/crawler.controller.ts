@@ -149,4 +149,12 @@ export class CrawlerController {
     const result = await this.scheduleService.resetSchedule(key);
     return { message: `스케줄 기본값으로 리셋: ${key}`, ...result };
   }
+
+  /** POST /api/admin/crawler/schedules/:key/run — 스케줄 즉시 실행 */
+  @Post('schedules/:key/run')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async runScheduleNow(@Param('key') key: string) {
+    const result = await this.scheduleService.runNow(key);
+    return { message: `즉시 실행 시작: ${key} (${result.enqueued}개 스토어)`, ...result };
+  }
 }

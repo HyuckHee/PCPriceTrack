@@ -113,6 +113,8 @@ export default function AdminPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
+  const [runningSchedule, setRunningSchedule] = useState<string | null>(null);
+  const [triggeringAll, setTriggeringAll] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('gpu');
   const [activeTab, setActiveTab] = useState<'stores' | 'schedule' | 'jobs'>('stores');
   const [toast, setToast] = useState('');
@@ -241,12 +243,29 @@ export default function AdminPage() {
   };
 
   const triggerAll = async () => {
+    setTriggeringAll(true);
     try {
-      await fetch(`${API_BASE}/admin/crawler/trigger/all`, {
+      const res = await fetch(`${API_BASE}/admin/crawler/trigger/all`, {
         method: 'POST', headers: { 'x-admin-key': savedKey },
       });
-      showToast('전체 크롤링 시작');
+      const data = await res.json().catch(() => ({})) as { enqueued?: number };
+      showToast(`전체 크롤링 시작 (${data.enqueued ?? 0}개 스토어)`);
+      setTimeout(() => { fetchJobs(savedKey); }, 2000);
     } catch { showToast('전체 크롤링 시작 실패'); }
+    finally { setTriggeringAll(false); }
+  };
+
+  const runScheduleNow = async (key: string, label: string) => {
+    setRunningSchedule(key);
+    try {
+      const res = await fetch(`${API_BASE}/admin/crawler/schedules/${encodeURIComponent(key)}/run`, {
+        method: 'POST', headers: { 'x-admin-key': savedKey },
+      });
+      const data = await res.json().catch(() => ({})) as { enqueued?: number };
+      showToast(`[${label}] 즉시 실행 시작 (${data.enqueued ?? 0}개 스토어)`);
+      setTimeout(() => { fetchJobs(savedKey); }, 2000);
+    } catch { showToast('즉시 실행 실패'); }
+    finally { setRunningSchedule(null); }
   };
 
   const saveSchedule = async (key: string) => {
@@ -322,8 +341,8 @@ export default function AdminPage() {
           <p className="text-sm text-gray-400 mt-1">스토어 활성화 및 크롤링 제어</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={triggerAll} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg font-medium transition-colors">
-            전체 크롤링
+          <button onClick={triggerAll} disabled={triggeringAll} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg font-medium transition-colors disabled:opacity-60">
+            {triggeringAll ? '실행 중...' : '전체 즉시 실행'}
           </button>
           <button onClick={() => { fetchStatus(savedKey); fetchJobs(savedKey); fetchSchedules(savedKey); }} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors">
             새로고침
@@ -476,6 +495,12 @@ export default function AdminPage() {
                     <p className="text-xs text-gray-500 mt-0.5">{schedule.description}</p>
                   </div>
                   <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => runScheduleNow(schedule.key, schedule.label)}
+                      disabled={runningSchedule === schedule.key}
+                      className="px-3 py-1.5 text-xs bg-green-700 hover:bg-green-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50">
+                      {runningSchedule === schedule.key ? '실행 중...' : '지금 실행'}
+                    </button>
                     {schedule.updatedAt && (
                       <button onClick={() => resetScheduleToDefault(schedule.key)}
                         className="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors">

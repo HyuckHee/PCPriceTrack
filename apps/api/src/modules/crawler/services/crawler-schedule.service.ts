@@ -102,6 +102,13 @@ export class CrawlerScheduleService implements OnModuleInit {
     };
   }
 
+  /** 스케줄 즉시 실행 (크론 타이머 무시하고 바로 enqueue) */
+  async runNow(key: string): Promise<{ enqueued: number }> {
+    if (!DEFAULTS[key]) throw new Error(`알 수 없는 스케줄 키: ${key}`);
+    this.logger.log(`수동 즉시 실행: ${key}`);
+    return this.crawlerService.enqueueAllStores({ triggeredBy: 'manual', note: `${key}:manual` });
+  }
+
   /** 스케줄 기본값으로 리셋 */
   async resetSchedule(key: string): Promise<ScheduleConfig> {
     if (!DEFAULTS[key]) throw new Error(`알 수 없는 스케줄 키: ${key}`);
