@@ -62,7 +62,7 @@ export class InMemoryQueueService {
       opts: { attempts: opts.attempts ?? 1 },
     };
 
-    const queuedJob: QueuedJob<T> = {
+    const queuedJob: QueuedJob<unknown> = {
       job: job as unknown as Job<unknown>,
       opts: {
         attempts: opts.attempts ?? 1,

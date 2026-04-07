@@ -45,7 +45,7 @@ import { HealthController } from './health.controller';
     ProductsModule,
     AlertsModule,
     BuildsModule,
-    CrawlerModule,
+    CrawlerModule.register(),
   ],
   controllers: [HealthController],
   providers: [
