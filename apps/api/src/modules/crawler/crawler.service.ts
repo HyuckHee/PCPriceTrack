@@ -194,38 +194,25 @@ export class CrawlerService {
     const statuses: StoreStatus[] = [];
 
     for (const store of allStores) {
-      try {
-        const [lastJob] = await this.db
-          .select({ status: crawlJobs.status, createdAt: crawlJobs.createdAt })
-          .from(crawlJobs)
-          .where(eq(crawlJobs.storeId, store.id))
-          .orderBy(desc(crawlJobs.createdAt))
-          .limit(1);
+      const [lastJob] = await this.db
+        .select({ status: crawlJobs.status, createdAt: crawlJobs.createdAt })
+        .from(crawlJobs)
+        .where(eq(crawlJobs.storeId, store.id))
+        .orderBy(desc(crawlJobs.createdAt))
+        .limit(1);
 
-        const circuitData = await this.circuitBreaker.getState(store.id);
-        const queuedCount = await this.queue.getWaitingCount();
+      const circuitData = await this.circuitBreaker.getState(store.id);
+      const queuedCount = await this.queue.getWaitingCount();
 
-        statuses.push({
-          storeId: store.id,
-          storeName: store.name,
-          isActive: store.isActive,
-          circuitState: circuitData.state,
-          lastJobStatus: lastJob?.status ?? null,
-          lastJobAt: lastJob?.createdAt ?? null,
-          queuedJobs: queuedCount,
-        });
-      } catch (err) {
-        this.logger.error(`getStoreStatuses failed for store ${store.name}: ${(err as Error).message}\n${(err as Error).stack}`);
-        statuses.push({
-          storeId: store.id,
-          storeName: store.name,
-          isActive: store.isActive,
-          circuitState: 'CLOSED' as any,
-          lastJobStatus: `ERROR: ${(err as Error).message}`,
-          lastJobAt: null,
-          queuedJobs: 0,
-        });
-      }
+      statuses.push({
+        storeId: store.id,
+        storeName: store.name,
+        isActive: store.isActive,
+        circuitState: circuitData.state,
+        lastJobStatus: lastJob?.status ?? null,
+        lastJobAt: lastJob?.createdAt ?? null,
+        queuedJobs: queuedCount,
+      });
     }
 
     return statuses;
