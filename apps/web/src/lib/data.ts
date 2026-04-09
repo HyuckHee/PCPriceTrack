@@ -134,7 +134,9 @@ export async function fetchProducts(params: {
   if (params.minPrice) query.set('minPrice', params.minPrice);
   if (params.maxPrice) query.set('maxPrice', params.maxPrice);
 
-  return api.get<ProductsResponse>(`/products?${query}`);
+  return api
+    .get<ProductsResponse>(`/products?${query}`)
+    .catch(() => getMockProductsResponse({ ...params, limit: 24 }) as unknown as ProductsResponse);
 }
 
 export async function fetchCategories(): Promise<Category[]> {
