@@ -1,7 +1,8 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import { DATABASE_TOKEN, Database } from '../../database/database.provider';
 import { categories, crawlJobs, productListings, products } from '../../database/schema';
+import { productGroups } from '../../database/schema/product-groups';
 import { AdapterFactory } from './adapters/adapter.factory';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { PriceIngestionService } from './services/price-ingestion.service';
@@ -284,6 +285,9 @@ export class CrawlerProcessor implements OnModuleInit, OnModuleDestroy {
             productId = existing.id;
           }
 
+          // ── 자동 그룹화: 동일 model이 다른 스토어에 존재하면 같은 그룹으로 뮳음 ────
+          await this.autoGroupByModel(productId, result.externalId, name, result.imageUrl);
+
           // Insert listing (ignore conflict on store_id + external_id)
           const insertedListing = await this.db
             .insert(productListings)
@@ -500,6 +504,66 @@ export class CrawlerProcessor implements OnModuleInit, OnModuleDestroy {
       .update(crawlJobs)
       .set({ status, ...extras })
       .where(eq(crawlJobs.id, crawlJobId));
+  }
+
+  /**
+   * 동일한 externalId를 가진 다른 store의 product가 있으면 같은 group으로 묶습니다.
+   * 예: Naver의 nvMid와 11번가의 prdNo가 우연히 같을 때 (실제론 드물지만 안전장치).
+   * 주로 어드민 /products/merge 엔드포인트로 수동 그룹화를 권장합니다.
+   */
+  private async autoGroupByModel(
+    productId: string,
+    externalId: string,
+    name: string,
+    imageUrl?: string | null,
+  ): Promise<void> {
+    try {
+      // 같은 externalId를 가진 다른 product 조회
+      const others = await this.db
+        .select({ productId: productListings.productId, groupId: products.groupId })
+        .from(productListings)
+        .innerJoin(products, eq(productListings.productId, products.id))
+        .where(
+          and(
+            eq(productListings.externalId, externalId),
+            ne(productListings.productId, productId),
+          ),
+        );
+
+      if (others.length === 0) return;
+
+      // 이미 그룹이 있으면 재사용, 없으면 생성
+      const existingGroupId = others.find((o) => o.groupId)?.groupId;
+      let groupId: string;
+
+      if (existingGroupId) {
+        groupId = existingGroupId;
+      } else {
+        const slug = this.toSlug(`${name}-${externalId}-group`).slice(0, 350);
+        const [newGroup] = await this.db
+          .insert(productGroups)
+          .values({ name, slug, imageUrl: imageUrl ?? undefined })
+          .onConflictDoNothing()
+          .returning({ id: productGroups.id });
+
+        if (!newGroup) return; // slug 충돌 시 skip
+        groupId = newGroup.id;
+
+        for (const other of others) {
+          await this.db
+            .update(products)
+            .set({ groupId, updatedAt: new Date() })
+            .where(eq(products.id, other.productId));
+        }
+      }
+
+      await this.db
+        .update(products)
+        .set({ groupId, updatedAt: new Date() })
+        .where(eq(products.id, productId));
+    } catch (err) {
+      this.logger.warn(`[autoGroupByModel] ${externalId}: ${(err as Error).message}`);
+    }
   }
 
   async onModuleDestroy(): Promise<void> {

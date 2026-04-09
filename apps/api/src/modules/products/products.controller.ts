@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { ListProductsDto } from './dto/list-products.dto';
 import { Public } from '../../common/decorators/public.decorator';
@@ -29,5 +29,21 @@ export class ProductsController {
     @Query('days') days?: string,
   ) {
     return this.productsService.priceHistory(slug, days ? parseInt(days) : 30);
+  }
+
+  /**
+   * [Admin] 여러 제품을 하나의 그룹으로 묶습니다.
+   *
+   * POST /products/admin/merge-group
+   * Body: { productIds: string[], groupName?: string }
+   *
+   * - productIds: 묶을 product ID 목록 (최소 2개)
+   * - groupName:  그룹 대표 이름 (미지정 시 첫 번째 제품 이름 사용)
+   */
+  @Post('admin/merge-group')
+  mergeGroup(
+    @Body() body: { productIds: string[]; groupName?: string },
+  ) {
+    return this.productsService.mergeGroup(body.productIds, body.groupName);
   }
 }

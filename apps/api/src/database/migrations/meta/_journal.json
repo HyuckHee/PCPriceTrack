@@ -50,6 +50,13 @@
       "when": 1775704637114,
       "tag": "0006_exotic_carmella_unuscione",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775711461319,
+      "tag": "0007_high_galactus",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm';
 import { categories } from './categories';
+import { productGroups } from './product-groups';
 import { products } from './products';
 import { stores } from './stores';
 import { productListings } from './product-listings';
@@ -13,7 +14,15 @@ export const categoriesRelations = relations(categories, ({ many }) => ({
   products: many(products),
 }));
 
+export const productGroupsRelations = relations(productGroups, ({ many }) => ({
+  variants: many(products),
+}));
+
 export const productsRelations = relations(products, ({ one, many }) => ({
+  group: one(productGroups, {
+    fields: [products.groupId],
+    references: [productGroups.id],
+  }),
   category: one(categories, {
     fields: [products.categoryId],
     references: [categories.id],
@@ -21,6 +30,7 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   listings: many(productListings),
   alerts: many(alerts),
 }));
+
 
 export const storesRelations = relations(stores, ({ many }) => ({
   listings: many(productListings),

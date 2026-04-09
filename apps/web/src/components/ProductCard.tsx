@@ -11,10 +11,12 @@ interface Product {
   brand: string;
   slug: string;
   imageUrl: string | null;
-  lowestPrice: string | null;
-  lowestCurrency: string | null;
-  previousLowestPrice: string | null;
-  originalPrice: string | null;
+  group: { id: string; name: string; slug: string } | null;
+  minPrice: string | null;
+  maxPrice: string | null;
+  currency: string | null;
+  previousMinPrice: string | null;
+  storeCount: number | null;
   storeNames: string | null;
   category: { id: string; name: string };
 }
@@ -52,59 +54,50 @@ export function ProductCard({ p }: { p: Product }) {
           </div>
         ) : null;
       })()}
-      {p.lowestPrice &&
+      {p.minPrice &&
         (() => {
-          const origCurrency = p.lowestCurrency ?? 'USD';
-          const rawPrice = parseFloat(p.lowestPrice);
-          const current = convertPrice(rawPrice, origCurrency, displayCurrency, usdToKrw);
+          const origCurrency = p.currency ?? 'KRW';
+          const minRaw = parseFloat(p.minPrice);
+          const maxRaw = p.maxPrice ? parseFloat(p.maxPrice) : null;
+          const prevRaw = p.previousMinPrice ? parseFloat(p.previousMinPrice) : null;
 
-          const rawList = p.originalPrice ? parseFloat(p.originalPrice) : null;
-          const rawPrev = rawList ?? (p.previousLowestPrice ? parseFloat(p.previousLowestPrice) : null);
-          const listPrice = rawList ? convertPrice(rawList, origCurrency, displayCurrency, usdToKrw) : null;
-          const prev = rawPrev ? convertPrice(rawPrev, origCurrency, displayCurrency, usdToKrw) : null;
+          const minConverted = convertPrice(minRaw, origCurrency, displayCurrency, usdToKrw);
+          const maxConverted = maxRaw ? convertPrice(maxRaw, origCurrency, displayCurrency, usdToKrw) : null;
+          const prev = prevRaw ? convertPrice(prevRaw, origCurrency, displayCurrency, usdToKrw) : null;
 
-          const savings = prev && prev > current ? prev - current : null;
-          const drop = savings && prev ? Math.round((savings / prev) * 100) : null;
+          const showRange = maxConverted && maxConverted > minConverted * 1.01; // 1% 이상 차이날 때만 범위 표시
+          const drop = prev && prev > minConverted ? Math.round(((prev - minConverted) / prev) * 100) : null;
 
           return (
             <div className="mt-3 pt-3 border-t border-gray-700 space-y-1">
-              {listPrice && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-400">정가</span>
-                  <span className="text-xs text-gray-400 line-through">
-                    {formatPrice(listPrice, displayCurrency)}
-                  </span>
-                  {displayCurrency === 'KRW' && (
-                    <span className="text-xs text-gray-600">
-                      ({formatPriceShort(listPrice, displayCurrency)})
-                    </span>
-                  )}
-                </div>
-              )}
               <div className="flex items-center gap-2 flex-wrap">
                 <div>
                   <span className="text-xs text-gray-400">최저 </span>
-                  <span className="text-green-400 font-bold">{formatPrice(current, displayCurrency)}</span>
+                  <span className="text-green-400 font-bold">{formatPrice(minConverted, displayCurrency)}</span>
+                  {showRange && maxConverted && (
+                    <>
+                      <span className="text-xs text-gray-500 mx-1">~</span>
+                      <span className="text-xs text-gray-400">{formatPrice(maxConverted, displayCurrency)}</span>
+                    </>
+                  )}
                   {displayCurrency === 'KRW' && (
-                    <span className="text-xs text-gray-400 ml-1">
-                      ({formatPriceShort(current, displayCurrency)})
-                    </span>
+                    <span className="text-xs text-gray-500 ml-1">({formatPriceShort(minConverted, 'KRW')})</span>
                   )}
                 </div>
-                {drop && (
+                {drop && drop >= 5 && (
                   <Badge variant={drop >= 20 ? 'destructive' : drop >= 10 ? 'warning' : 'caution'}>
                     -{drop}%
                   </Badge>
                 )}
               </div>
-              {savings && (
-                <div className="text-xs text-orange-400">{formatPrice(savings, displayCurrency)} 할인</div>
-              )}
               {p.storeNames && (
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   {p.storeNames.split(', ').map((store) => (
                     <Badge key={store} variant="store">{store}</Badge>
                   ))}
+                  {p.storeCount && p.storeCount > 1 && (
+                    <Badge variant="secondary">{p.storeCount}개 판매처</Badge>
+                  )}
                 </div>
               )}
             </div>

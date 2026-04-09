@@ -24,14 +24,20 @@ export interface Category {
 
 export interface ProductListItem {
   id: string;
+  groupId: string | null;
   name: string;
   brand: string;
   slug: string;
   imageUrl: string | null;
-  lowestPrice: string | null;
-  lowestCurrency: string | null;
-  previousLowestPrice: string | null;
-  originalPrice: string | null;
+  /** 그룹이 있으면 그룹 정보 */
+  group: { id: string; name: string; slug: string } | null;
+  /** 그룹(또는 단독 제품) 내 최저가 */
+  minPrice: string | null;
+  /** 그룹(또는 단독 제품) 내 최고가 */
+  maxPrice: string | null;
+  currency: string | null;
+  previousMinPrice: string | null;
+  storeCount: number | null;
   storeNames: string | null;
   category: { id: string; name: string };
 }
@@ -62,10 +68,32 @@ export interface Listing {
   latestCurrency: string | null;
   latestOriginalPrice: string | null;
   inStock: boolean | null;
+  mallName?: string | null;
   store: { id: string; name: string; logoUrl: string | null };
 }
 
-export interface ProductDetail {
+export interface ProductVariant {
+  id: string;
+  name: string;
+  brand: string;
+  model: string;
+  slug: string;
+  imageUrl: string | null;
+  specs: Record<string, unknown>;
+  category: { name: string; slug: string };
+  listings: Listing[];
+}
+
+/** 그룹 상세 (여러 variant를 묶음) */
+export interface GroupDetail {
+  type: 'group';
+  group: { id: string; name: string; slug: string; imageUrl: string | null };
+  variants: ProductVariant[];
+}
+
+/** 단독 제품 상세 */
+export interface SingleProductDetail {
+  type: 'product';
   id: string;
   name: string;
   brand: string;
@@ -78,8 +106,11 @@ export interface ProductDetail {
   listings: Listing[];
 }
 
+export type ProductDetail = GroupDetail | SingleProductDetail;
+
 export interface PriceRecord {
   price: string;
+  currency: string;
   recordedAt: string;
   store: { id: string; name: string };
 }
@@ -94,7 +125,7 @@ export async function fetchProducts(params: {
   page: string;
 }): Promise<ProductsResponse> {
   if (IS_DEMO) {
-    return getMockProductsResponse({ ...params, limit: 24 }) as ProductsResponse;
+    return getMockProductsResponse({ ...params, limit: 24 }) as unknown as ProductsResponse;
   }
 
   const query = new URLSearchParams({ page: params.page, limit: '24' });
