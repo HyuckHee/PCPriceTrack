@@ -50,8 +50,9 @@ export class ProductsService {
     if (maxPrice !== undefined) havConds.push(sql`COALESCE(gp.min_price, 0) <= ${maxPrice}`);
     const havingSQL = havConds.length ? sql`AND ${sql.join(havConds, sql` AND `)}` : sql``;
 
-    const mainQuery = sql`
-      WITH group_prices AS (
+    // CTE 공통 정의
+    const gpCTE = sql`
+      group_prices AS (
         SELECT
           COALESCE(p.group_id::text, p.id::text) AS group_key,
           MIN(pr.price::numeric) FILTER (WHERE
@@ -71,7 +72,10 @@ export class ProductsService {
           AND pr.recorded_at = (SELECT MAX(pr3.recorded_at) FROM price_records pr3 WHERE pr3.listing_id = pl.id)
         INNER JOIN stores s ON pl.store_id = s.id
         GROUP BY COALESCE(p.group_id::text, p.id::text)
-      ),
+      )
+    `;
+
+    const ppCTE = sql`
       prev_prices AS (
         SELECT
           COALESCE(p.group_id::text, p.id::text) AS group_key,
@@ -89,26 +93,42 @@ export class ProductsService {
         WHERE ranked.rn = 2
         GROUP BY COALESCE(p.group_id::text, p.id::text)
       )
-      SELECT
-        p.id, p.group_id AS "groupId", p.name, p.brand, p.model, p.slug,
-        p.image_url AS "imageUrl", p.specs, p.created_at AS "createdAt",
-        c.id AS "cat_id", c.name AS "cat_name", c.slug AS "cat_slug",
-        pg.id AS "grp_id", pg.name AS "grp_name", pg.slug AS "grp_slug",
-        gp.min_price AS "minPrice", gp.max_price AS "maxPrice",
-        gp.currency, gp.store_count AS "storeCount", gp.store_names AS "storeNames",
-        pp.prev_min_price AS "previousMinPrice"
-      FROM products p
+    `;
+
+    const joins = sql`
       INNER JOIN categories c ON c.id = p.category_id
       LEFT JOIN product_groups pg ON pg.id = p.group_id
       LEFT JOIN group_prices gp ON gp.group_key = COALESCE(p.group_id::text, p.id::text)
       LEFT JOIN prev_prices pp ON pp.group_key = COALESCE(p.group_id::text, p.id::text)
-      WHERE ${whereSQL}
-      ${havingSQL}
     `;
 
     const [dataResult, countResult] = await Promise.all([
-      this.db.execute(sql`${mainQuery} ORDER BY p.created_at DESC LIMIT ${limit} OFFSET ${offset}`),
-      this.db.execute(sql`SELECT COUNT(*)::int AS count FROM (${mainQuery}) AS sub`),
+      this.db.execute(sql`
+        WITH ${gpCTE}, ${ppCTE}
+        SELECT
+          p.id, p.group_id AS "groupId", p.name, p.brand, p.model, p.slug,
+          p.image_url AS "imageUrl", p.specs, p.created_at AS "createdAt",
+          c.id AS "cat_id", c.name AS "cat_name", c.slug AS "cat_slug",
+          pg.id AS "grp_id", pg.name AS "grp_name", pg.slug AS "grp_slug",
+          gp.min_price AS "minPrice", gp.max_price AS "maxPrice",
+          gp.currency, gp.store_count AS "storeCount", gp.store_names AS "storeNames",
+          pp.prev_min_price AS "previousMinPrice"
+        FROM products p
+        ${joins}
+        WHERE ${whereSQL}
+        ${havingSQL}
+        ORDER BY p.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `),
+      this.db.execute(sql`
+        WITH ${gpCTE}
+        SELECT COUNT(*)::int AS count
+        FROM products p
+        INNER JOIN categories c ON c.id = p.category_id
+        LEFT JOIN group_prices gp ON gp.group_key = COALESCE(p.group_id::text, p.id::text)
+        WHERE ${whereSQL}
+        ${havingSQL}
+      `),
     ]);
 
     const rows = (dataResult.rows as Record<string, unknown>[]).map((r) => ({
