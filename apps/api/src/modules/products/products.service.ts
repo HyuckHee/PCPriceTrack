@@ -52,8 +52,8 @@ export class ProductsService {
     }
 
     const whereClause = extraWhere.length
-      ? `AND (p.group_id IS NULL OR p.id::text = (SELECT MIN(p2.id::text) FROM products p2 WHERE p2.group_id = p.group_id)) AND ${extraWhere.join(' AND ')}`
-      : `AND (p.group_id IS NULL OR p.id::text = (SELECT MIN(p2.id::text) FROM products p2 WHERE p2.group_id = p.group_id))`;
+      ? `AND (p.group_id IS NULL OR p.id = (SELECT p2.id FROM products p2 WHERE p2.group_id = p.group_id ORDER BY p2.created_at LIMIT 1)) AND ${extraWhere.join(' AND ')}`
+      : `AND (p.group_id IS NULL OR p.id = (SELECT p2.id FROM products p2 WHERE p2.group_id = p.group_id ORDER BY p2.created_at LIMIT 1))`;
 
     const priceWhereData: string[] = [];
     if (minPrice !== undefined) { priceWhereData.push(`COALESCE(gp.min_price, 0) >= $${pi++}`); params.push(minPrice); }
@@ -75,8 +75,8 @@ export class ProductsService {
       ci++;
     }
     const countWhere = countExtraWhere.length
-      ? `AND (p.group_id IS NULL OR p.id::text = (SELECT MIN(p2.id::text) FROM products p2 WHERE p2.group_id = p.group_id)) AND ${countExtraWhere.join(' AND ')}`
-      : `AND (p.group_id IS NULL OR p.id::text = (SELECT MIN(p2.id::text) FROM products p2 WHERE p2.group_id = p.group_id))`;
+      ? `AND (p.group_id IS NULL OR p.id = (SELECT p2.id FROM products p2 WHERE p2.group_id = p.group_id ORDER BY p2.created_at LIMIT 1)) AND ${countExtraWhere.join(' AND ')}`
+      : `AND (p.group_id IS NULL OR p.id = (SELECT p2.id FROM products p2 WHERE p2.group_id = p.group_id ORDER BY p2.created_at LIMIT 1))`;
     const countPriceWhere: string[] = [];
     if (minPrice !== undefined) { countPriceWhere.push(`COALESCE(gp.min_price, 0) >= $${ci++}`); countParams.push(minPrice); }
     if (maxPrice !== undefined) { countPriceWhere.push(`COALESCE(gp.min_price, 0) <= $${ci++}`); countParams.push(maxPrice); }
