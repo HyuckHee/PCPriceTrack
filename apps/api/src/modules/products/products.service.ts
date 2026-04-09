@@ -1,5 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { Pool } from 'pg';
 import { Database, DATABASE_TOKEN } from '../../database/database.provider';
 import { products } from '../../database/schema/products';
 import { productGroups } from '../../database/schema/product-groups';
@@ -20,7 +21,10 @@ const PRICE_SANITY_FILTER = sql.raw(`
 
 @Injectable()
 export class ProductsService {
-  constructor(@Inject(DATABASE_TOKEN) private db: Database) {}
+  constructor(
+    @Inject(DATABASE_TOKEN) private db: Database,
+    @Inject('PG_POOL') private pool: Pool,
+  ) {}
 
   // ─── 리스트 ─────────────────────────────────────────────────────────────
 
@@ -34,25 +38,52 @@ export class ProductsService {
     const { page = 1, limit = 20, categoryId, brand, search, minPrice, maxPrice } = dto;
     const offset = (page - 1) * limit;
 
-    // ── 동적 WHERE 조건 ────────────────────────────────────────────────────
-    const conds: ReturnType<typeof sql>[] = [
-      sql`(p.group_id IS NULL OR p.id = (SELECT MIN(p2.id) FROM products p2 WHERE p2.group_id = p.group_id))`,
-    ];
-    if (categoryId) conds.push(sql`p.category_id = ${categoryId}`);
-    if (brand)      conds.push(sql`p.brand ILIKE ${'%' + brand + '%'}`);
-    if (search)     conds.push(sql`(p.name ILIKE ${'%' + search + '%'} OR p.brand ILIKE ${'%' + search + '%'} OR p.model ILIKE ${'%' + search + '%'})`);
+    // ── 동적 WHERE 파라미터 수집 ──────────────────────────────────────────
+    const extraWhere: string[] = [];
+    const params: unknown[] = [];
+    let pi = 1; // parameter index
 
-    const whereSQL = sql.join(conds, sql` AND `);
+    if (categoryId) { extraWhere.push(`p.category_id = $${pi++}`); params.push(categoryId); }
+    if (brand)      { extraWhere.push(`p.brand ILIKE $${pi++}`);    params.push(`%${brand}%`); }
+    if (search)     {
+      extraWhere.push(`(p.name ILIKE $${pi} OR p.brand ILIKE $${pi} OR p.model ILIKE $${pi})`);
+      params.push(`%${search}%`);
+      pi++;
+    }
 
-    // ── 가격 필터 HAVING ──────────────────────────────────────────────────
-    const havConds: ReturnType<typeof sql>[] = [];
-    if (minPrice !== undefined) havConds.push(sql`COALESCE(gp.min_price, 0) >= ${minPrice}`);
-    if (maxPrice !== undefined) havConds.push(sql`COALESCE(gp.min_price, 0) <= ${maxPrice}`);
-    const havingSQL = havConds.length ? sql`AND ${sql.join(havConds, sql` AND `)}` : sql``;
+    const whereClause = extraWhere.length
+      ? `AND (p.group_id IS NULL OR p.id = (SELECT MIN(p2.id) FROM products p2 WHERE p2.group_id = p.group_id)) AND ${extraWhere.join(' AND ')}`
+      : `AND (p.group_id IS NULL OR p.id = (SELECT MIN(p2.id) FROM products p2 WHERE p2.group_id = p.group_id))`;
 
-    // CTE 공통 정의
-    const gpCTE = sql`
-      group_prices AS (
+    const priceWhereData: string[] = [];
+    if (minPrice !== undefined) { priceWhereData.push(`COALESCE(gp.min_price, 0) >= $${pi++}`); params.push(minPrice); }
+    if (maxPrice !== undefined) { priceWhereData.push(`COALESCE(gp.min_price, 0) <= $${pi++}`); params.push(maxPrice); }
+    const priceFilterData = priceWhereData.length ? `AND ${priceWhereData.join(' AND ')}` : '';
+
+    const limitIdx = pi++;   params.push(limit);
+    const offsetIdx = pi++;  params.push(offset);
+
+    // Count params (separate — reuse same param values but rebuild indices)
+    const countParams: unknown[] = [];
+    let ci = 1;
+    const countExtraWhere: string[] = [];
+    if (categoryId) { countExtraWhere.push(`p.category_id = $${ci++}`); countParams.push(categoryId); }
+    if (brand)      { countExtraWhere.push(`p.brand ILIKE $${ci++}`);    countParams.push(`%${brand}%`); }
+    if (search)     {
+      countExtraWhere.push(`(p.name ILIKE $${ci} OR p.brand ILIKE $${ci} OR p.model ILIKE $${ci})`);
+      countParams.push(`%${search}%`);
+      ci++;
+    }
+    const countWhere = countExtraWhere.length
+      ? `AND (p.group_id IS NULL OR p.id = (SELECT MIN(p2.id) FROM products p2 WHERE p2.group_id = p.group_id)) AND ${countExtraWhere.join(' AND ')}`
+      : `AND (p.group_id IS NULL OR p.id = (SELECT MIN(p2.id) FROM products p2 WHERE p2.group_id = p.group_id))`;
+    const countPriceWhere: string[] = [];
+    if (minPrice !== undefined) { countPriceWhere.push(`COALESCE(gp.min_price, 0) >= $${ci++}`); countParams.push(minPrice); }
+    if (maxPrice !== undefined) { countPriceWhere.push(`COALESCE(gp.min_price, 0) <= $${ci++}`); countParams.push(maxPrice); }
+    const priceFilterCount = countPriceWhere.length ? `AND ${countPriceWhere.join(' AND ')}` : '';
+
+    const dataSQL = `
+      WITH group_prices AS (
         SELECT
           COALESCE(p.group_id::text, p.id::text) AS group_key,
           MIN(pr.price::numeric) FILTER (WHERE
@@ -65,17 +96,14 @@ export class ProductsService {
           ) AS max_price,
           MIN(pr.currency) AS currency,
           COUNT(DISTINCT pl.store_id) AS store_count,
-          STRING_AGG(DISTINCT s.name, ', ' ORDER BY s.name) AS store_names
+          STRING_AGG(s.name, ', ') AS store_names
         FROM products p
         INNER JOIN product_listings pl ON pl.product_id = p.id AND pl.is_active = true
         INNER JOIN price_records pr ON pr.listing_id = pl.id
           AND pr.recorded_at = (SELECT MAX(pr3.recorded_at) FROM price_records pr3 WHERE pr3.listing_id = pl.id)
         INNER JOIN stores s ON pl.store_id = s.id
         GROUP BY COALESCE(p.group_id::text, p.id::text)
-      )
-    `;
-
-    const ppCTE = sql`
+      ),
       prev_prices AS (
         SELECT
           COALESCE(p.group_id::text, p.id::text) AS group_key,
@@ -93,70 +121,86 @@ export class ProductsService {
         WHERE ranked.rn = 2
         GROUP BY COALESCE(p.group_id::text, p.id::text)
       )
-    `;
-
-    const joins = sql`
+      SELECT
+        p.id, p.group_id AS "groupId", p.name, p.brand, p.model, p.slug,
+        p.image_url AS "imageUrl", p.specs, p.created_at AS "createdAt",
+        c.id AS "cat_id", c.name AS "cat_name", c.slug AS "cat_slug",
+        pg.id AS "grp_id", pg.name AS "grp_name", pg.slug AS "grp_slug",
+        gp.min_price AS "minPrice", gp.max_price AS "maxPrice",
+        gp.currency, gp.store_count AS "storeCount", gp.store_names AS "storeNames",
+        pp.prev_min_price AS "previousMinPrice"
+      FROM products p
       INNER JOIN categories c ON c.id = p.category_id
       LEFT JOIN product_groups pg ON pg.id = p.group_id
       LEFT JOIN group_prices gp ON gp.group_key = COALESCE(p.group_id::text, p.id::text)
       LEFT JOIN prev_prices pp ON pp.group_key = COALESCE(p.group_id::text, p.id::text)
+      WHERE 1=1
+      ${whereClause}
+      ${priceFilterData}
+      ORDER BY p.created_at DESC
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}
     `;
 
-    const [dataResult, countResult] = await Promise.all([
-      this.db.execute(sql`
-        WITH ${gpCTE}, ${ppCTE}
+    const countSQL = `
+      WITH group_prices AS (
         SELECT
-          p.id, p.group_id AS "groupId", p.name, p.brand, p.model, p.slug,
-          p.image_url AS "imageUrl", p.specs, p.created_at AS "createdAt",
-          c.id AS "cat_id", c.name AS "cat_name", c.slug AS "cat_slug",
-          pg.id AS "grp_id", pg.name AS "grp_name", pg.slug AS "grp_slug",
-          gp.min_price AS "minPrice", gp.max_price AS "maxPrice",
-          gp.currency, gp.store_count AS "storeCount", gp.store_names AS "storeNames",
-          pp.prev_min_price AS "previousMinPrice"
+          COALESCE(p.group_id::text, p.id::text) AS group_key,
+          MIN(pr.price::numeric) FILTER (WHERE
+            (pr.currency = 'USD' AND pr.price::numeric BETWEEN 1 AND 7000) OR
+            (pr.currency = 'KRW' AND pr.price::numeric BETWEEN 1000 AND 10000000)
+          ) AS min_price
         FROM products p
-        ${joins}
-        WHERE ${whereSQL}
-        ${havingSQL}
-        ORDER BY p.created_at DESC
-        LIMIT ${limit} OFFSET ${offset}
-      `),
-      this.db.execute(sql`
-        WITH ${gpCTE}
-        SELECT COUNT(*)::int AS count
-        FROM products p
-        INNER JOIN categories c ON c.id = p.category_id
-        LEFT JOIN group_prices gp ON gp.group_key = COALESCE(p.group_id::text, p.id::text)
-        WHERE ${whereSQL}
-        ${havingSQL}
-      `),
-    ]);
+        INNER JOIN product_listings pl ON pl.product_id = p.id AND pl.is_active = true
+        INNER JOIN price_records pr ON pr.listing_id = pl.id
+          AND pr.recorded_at = (SELECT MAX(pr3.recorded_at) FROM price_records pr3 WHERE pr3.listing_id = pl.id)
+        GROUP BY COALESCE(p.group_id::text, p.id::text)
+      )
+      SELECT COUNT(*)::int AS count
+      FROM products p
+      INNER JOIN categories c ON c.id = p.category_id
+      LEFT JOIN group_prices gp ON gp.group_key = COALESCE(p.group_id::text, p.id::text)
+      WHERE 1=1
+      ${countWhere}
+      ${priceFilterCount}
+    `;
 
-    const rows = (dataResult.rows as Record<string, unknown>[]).map((r) => ({
-      id: r.id as string,
-      groupId: r.groupId as string | null,
-      name: r.name as string,
-      brand: r.brand as string,
-      model: r.model as string,
-      slug: r.slug as string,
-      imageUrl: r.imageUrl as string | null,
-      specs: r.specs as Record<string, unknown>,
-      createdAt: r.createdAt as Date,
-      category: { id: r.cat_id as string, name: r.cat_name as string, slug: r.cat_slug as string },
-      group: r.grp_id ? { id: r.grp_id as string, name: r.grp_name as string, slug: r.grp_slug as string } : null,
-      minPrice: r.minPrice != null ? String(r.minPrice) : null,
-      maxPrice: r.maxPrice != null ? String(r.maxPrice) : null,
-      currency: r.currency as string | null,
-      previousMinPrice: r.previousMinPrice != null ? String(r.previousMinPrice) : null,
-      storeCount: r.storeCount != null ? Number(r.storeCount) : null,
-      storeNames: r.storeNames as string | null,
-    }));
+    // pg pool 직접 사용 (Drizzle sql template 파라미터 중복 방지)
 
-    const total = Number((countResult.rows[0] as Record<string, unknown>).count ?? 0);
+    try {
+      const [dataResult, countResult] = await Promise.all([
+        this.pool.query(dataSQL, params),
+        this.pool.query(countSQL, countParams),
+      ]);
 
-    return {
-      data: rows,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
-    };
+      const rows = (dataResult.rows as Record<string, unknown>[]).map((r) => ({
+        id: r.id as string,
+        groupId: r['groupId'] as string | null,
+        name: r.name as string,
+        brand: r.brand as string,
+        model: r.model as string,
+        slug: r.slug as string,
+        imageUrl: r['imageUrl'] as string | null,
+        specs: r.specs as Record<string, unknown>,
+        createdAt: r['createdAt'] as Date,
+        category: { id: r['cat_id'] as string, name: r['cat_name'] as string, slug: r['cat_slug'] as string },
+        group: r['grp_id'] ? { id: r['grp_id'] as string, name: r['grp_name'] as string, slug: r['grp_slug'] as string } : null,
+        minPrice: r['minPrice'] != null ? String(r['minPrice']) : null,
+        maxPrice: r['maxPrice'] != null ? String(r['maxPrice']) : null,
+        currency: r.currency as string | null,
+        previousMinPrice: r['previousMinPrice'] != null ? String(r['previousMinPrice']) : null,
+        storeCount: r['storeCount'] != null ? Number(r['storeCount']) : null,
+        storeNames: r['storeNames'] as string | null,
+      }));
+
+      const total = Number((countResult.rows[0] as Record<string, unknown>).count ?? 0);
+
+      return {
+        data: rows,
+        meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      };
+    } catch (e) {
+      throw new Error(`list() SQL error: ${(e as Error).message}`);
+    }
   }
 
   // ─── 딜 ─────────────────────────────────────────────────────────────────
