@@ -78,8 +78,8 @@ export class AdapterFactory implements OnModuleInit {
     if (n.includes('11번가') || n.includes('11st') || n.includes('elevenst')) return new ElevenStAdapter(baseConfig);
     if (n.includes('gmarket') || n.includes('g마켓')) return new GmarketAdapter(baseConfig);
     if (n.includes('naver') || n.includes('네이버')) {
-      const clientId = this.config.get<string>('NAVER_CLIENT_ID');
-      const clientSecret = this.config.get<string>('NAVER_CLIENT_SECRET');
+      const clientId = this.config.get<string>('naver.clientId');
+      const clientSecret = this.config.get<string>('naver.clientSecret');
       if (!clientId || !clientSecret) {
         this.logger.warn(`네이버쇼핑 API 키 미설정 (NAVER_CLIENT_ID / NAVER_CLIENT_SECRET) — 어댑터 건너뜀`);
         return null;

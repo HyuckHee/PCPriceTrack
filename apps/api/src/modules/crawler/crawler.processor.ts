@@ -81,6 +81,62 @@ export class CrawlerProcessor implements OnModuleInit, OnModuleDestroy {
     await this.updateCrawlJob(crawlJobId, 'running', { startedAt: new Date() });
 
     const adapter = this.adapterFactory.getAdapter(storeId);
+
+    // ─── discoverProducts() 경로 (Naver 등 API 기반 어댑터) ─────────────────
+    // 검색 결과에 상품 데이터가 이미 포함돼 있어 scrapeUrls() 2단계가 불필요
+    if (adapter.discoverProducts) {
+      const allResults = await adapter.discoverProducts(categorySlug!);
+
+      if (allResults.length === 0) {
+        this.logger.warn(`No products discovered for category ${categorySlug} on store ${storeId}`);
+        await this.updateCrawlJob(crawlJobId, 'completed', {
+          urlsAttempted: 0, urlsSucceeded: 0, urlsFailed: 0, completedAt: new Date(),
+        });
+        return { crawlJobId, urlsAttempted: 0, urlsSucceeded: 0, urlsFailed: 0 };
+      }
+
+      // 이미 DB에 있는 externalId 필터링
+      const existing = await this.db
+        .select({ externalId: productListings.externalId })
+        .from(productListings)
+        .where(eq(productListings.storeId, storeId));
+      const knownExternals = new Set(existing.map((l) => l.externalId).filter(Boolean));
+
+      const newResults = allResults.filter((r) => r.externalId && !knownExternals.has(r.externalId));
+
+      this.logger.log(
+        `[Discovery] ${allResults.length} discovered, ${newResults.length} new for category=${categorySlug}`,
+      );
+
+      if (newResults.length === 0) {
+        await this.updateCrawlJob(crawlJobId, 'completed', {
+          urlsAttempted: 0, urlsSucceeded: 0, urlsFailed: 0, completedAt: new Date(),
+        });
+        return { crawlJobId, urlsAttempted: 0, urlsSucceeded: 0, urlsFailed: 0 };
+      }
+
+      const [category] = await this.db
+        .select()
+        .from(categories)
+        .where(eq(categories.slug, categorySlug!));
+
+      if (!category) {
+        const err = `Category not found: ${categorySlug}`;
+        await this.updateCrawlJob(crawlJobId, 'failed', { errorLog: err });
+        throw new Error(err);
+      }
+
+      const scrapeResults = newResults;
+      const failedCount = 0;
+
+      // → 공통 upsert 루프로 진행 (아래 코드 재사용)
+      return await this.upsertDiscoveryResults(
+        storeId, crawlJobId, job.id, categorySlug!, category,
+        scrapeResults, newResults.length, failedCount,
+      );
+    }
+
+    // ─── 기존 2단계 경로 (Playwright 기반 어댑터) ───────────────────────────
     if (!adapter.discoverProductUrls) {
       this.logger.warn(`Store ${storeId} adapter does not support discovery`);
       await this.updateCrawlJob(crawlJobId, 'completed', {
@@ -99,13 +155,47 @@ export class CrawlerProcessor implements OnModuleInit, OnModuleDestroy {
       return { crawlJobId, urlsAttempted: 0, urlsSucceeded: 0, urlsFailed: 0 };
     }
 
-    // 2. Filter out URLs already in DB
+    // 2. URL 정규화 (트래킹 파라미터 제거)
+    const cleanUrl = (raw: string): string => {
+      try {
+        const u = new URL(raw);
+        const TRACKING = [
+          'dib','dib_tag','qid','sr','ref','ref_','tag',
+          'pf_rd_p','pf_rd_r','pf_rd_s','pf_rd_t','pf_rd_i','pf_rd_m',
+          '_encoding','sprefix','crid','keywords','s',
+          'utm_source','utm_medium','utm_campaign','utm_term','utm_content',
+          'fbclid','gclid','msclkid',
+        ];
+        TRACKING.forEach((p) => u.searchParams.delete(p));
+        return u.toString();
+      } catch {
+        return raw;
+      }
+    };
+    const normalizedUrls = urls.map(cleanUrl);
+
+    // 3. Filter out URLs already in DB (URL + externalId 2단계 중복 체크)
     const existing = await this.db
-      .select({ url: productListings.url })
+      .select({ url: productListings.url, externalId: productListings.externalId })
       .from(productListings)
       .where(eq(productListings.storeId, storeId));
-    const knownUrls = new Set(existing.map((l) => l.url));
-    const newUrls = urls.filter((u) => !knownUrls.has(u));
+
+    const knownUrls      = new Set(existing.map((l) => l.url));
+    const knownExternals = new Set(existing.map((l) => l.externalId).filter(Boolean));
+
+    // externalId 추출 헬퍼 (Amazon ASIN, Newegg item 번호 등)
+    const extractExternalId = (url: string): string | null =>
+      url.match(/\/dp\/([A-Z0-9]{10})/i)?.[1] ??        // Amazon ASIN
+      url.match(/\/p\/(N82E\d+)/i)?.[1] ??               // Newegg item
+      url.match(/\/catalog\/(\d+)/)?.[1] ??               // Naver catalog
+      null;
+
+    const newUrls = normalizedUrls.filter((u) => {
+      if (knownUrls.has(u)) return false;
+      const eid = extractExternalId(u);
+      if (eid && knownExternals.has(eid)) return false;
+      return true;
+    });
 
     this.logger.log(
       `[Discovery] ${urls.length} discovered, ${newUrls.length} new for category=${categorySlug}`,
@@ -134,7 +224,23 @@ export class CrawlerProcessor implements OnModuleInit, OnModuleDestroy {
     const scrapeResults = await adapter.scrapeUrls(newUrls);
     const failedCount = newUrls.length - scrapeResults.length;
 
-    // 5. Upsert products + listings + ingest prices
+    return await this.upsertDiscoveryResults(
+      storeId, crawlJobId, job.id, categorySlug!, category,
+      scrapeResults, newUrls.length, failedCount,
+    );
+  }
+
+  /** Discovery 결과를 DB에 upsert하고 가격을 수집. 두 discovery 경로(URL 기반/직접)에서 공유 */
+  private async upsertDiscoveryResults(
+    storeId: string,
+    crawlJobId: string,
+    jobId: string | number,
+    categorySlug: string,
+    category: { id: string },
+    scrapeResults: import('./interfaces/adapter.interface').ScrapeResult[],
+    urlsAttempted: number,
+    failedCount: number,
+  ): Promise<CrawlJobResult> {
     let succeeded = 0;
     for (const result of scrapeResults) {
       if (!result.externalId) continue;
@@ -181,7 +287,7 @@ export class CrawlerProcessor implements OnModuleInit, OnModuleDestroy {
           // Insert listing (ignore conflict on store_id + external_id)
           const insertedListing = await this.db
             .insert(productListings)
-            .values({ productId, storeId, externalId: result.externalId, url: result.url })
+            .values({ productId, storeId, externalId: result.externalId, url: result.url, mallName: result.mallName })
             .onConflictDoNothing()
             .returning({ id: productListings.id });
 
@@ -227,19 +333,19 @@ export class CrawlerProcessor implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.updateCrawlJob(crawlJobId, 'completed', {
-      urlsAttempted: newUrls.length,
+      urlsAttempted,
       urlsSucceeded: succeeded,
       urlsFailed: failedCount + (scrapeResults.length - succeeded),
       completedAt: new Date(),
     });
 
     this.logger.log(
-      `Discovery job ${job.id} done | created/updated=${succeeded} | failed=${failedCount}`,
+      `Discovery job ${jobId} done | created/updated=${succeeded} | failed=${failedCount}`,
     );
 
     return {
       crawlJobId,
-      urlsAttempted: newUrls.length,
+      urlsAttempted,
       urlsSucceeded: succeeded,
       urlsFailed: failedCount,
     };
@@ -302,6 +408,20 @@ export class CrawlerProcessor implements OnModuleInit, OnModuleDestroy {
         const summary = await this.priceIngestion.ingest(target.listingId, result);
         alertsTriggered += summary.alertsTriggered;
         await this.circuitBreaker.recordSuccess(storeId);
+
+        // imageUrl이 새로 수집됐고 기존 값이 없으면 업데이트
+        if (result.imageUrl) {
+          const [listing] = await this.db
+            .select({ productId: productListings.productId })
+            .from(productListings)
+            .where(eq(productListings.id, target.listingId));
+          if (listing) {
+            await this.db
+              .update(products)
+              .set({ imageUrl: result.imageUrl })
+              .where(and(eq(products.id, listing.productId), eq(products.imageUrl, null as unknown as string)));
+          }
+        }
       } catch (err) {
         this.logger.error(
           `Ingestion failed for listing ${target.listingId}: ${(err as Error).message}`,
@@ -351,8 +471,10 @@ export class CrawlerProcessor implements OnModuleInit, OnModuleDestroy {
         listingId: productListings.id,
         url: productListings.url,
         externalId: productListings.externalId,
+        productName: products.name,
       })
       .from(productListings)
+      .leftJoin(products, eq(productListings.productId, products.id))
       .where(
         listingIds?.length
           ? inArray(productListings.id, listingIds)

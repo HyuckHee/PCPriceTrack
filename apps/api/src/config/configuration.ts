@@ -41,5 +41,9 @@ export default () => {
       concurrency: env.CRAWLER_CONCURRENCY,
       proxyUrl: env.PROXY_URL,
     },
+    naver: {
+      clientId: env.NAVER_CLIENT_ID,
+      clientSecret: env.NAVER_CLIENT_SECRET,
+    },
   };
 };

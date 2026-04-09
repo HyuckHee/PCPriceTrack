@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { AdapterResult, ISiteAdapter, ListingTarget, ScrapeResult } from '../interfaces/adapter.interface';
+import { isKrBlacklisted } from './kr-blacklist';
 
 /**
  * 네이버쇼핑 API 어댑터 (Playwright → REST API 전환)
@@ -40,6 +41,21 @@ interface NaverShopResponse {
   display: number;
   items: NaverShopItem[];
 }
+
+/**
+ * 카테고리별 수집 가능한 최저가 (원).
+ * 이 금액 미만 상품은 부품/액세서리로 간주하고 제외.
+ */
+const CATEGORY_MIN_PRICE: Record<string, number> = {
+  gpu:         200_000,   // 그래픽카드 최저 20만원
+  cpu:         100_000,   // CPU 최저 10만원
+  ram:          30_000,   // RAM 최저 3만원
+  ssd:          30_000,   // SSD 최저 3만원
+  motherboard: 100_000,   // 메인보드 최저 10만원
+  psu:          50_000,   // 파워 최저 5만원
+  case:         30_000,   // 케이스 최저 3만원
+  cooler:       20_000,   // 쿨러 최저 2만원
+};
 
 /** 카테고리별 검색 키워드 목록 */
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
@@ -99,6 +115,11 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, '').trim();
+}
+
+/** Naver API link 필드의 HTML 엔티티(&amp; 등) 디코딩 */
+function decodeNaverLink(link: string): string {
+  return link.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 }
 
 export class NaverShoppingApiAdapter implements ISiteAdapter {
@@ -162,20 +183,42 @@ export class NaverShoppingApiAdapter implements ISiteAdapter {
 
   /**
    * 기존 리스팅 가격 새로고침.
-   * externalId(nvMid)로 검색 → 최신 lprice 반환.
+   *
+   * 전략: 카테고리 키워드 배치 검색으로 전체 가격 맵을 먼저 빌드 →
+   *        nvMid O(1) 매핑. 맵에 없는 상품만 개별 검색 fallback.
+   *
+   * 장점:
+   *  - N개 상품 갱신에 (키워드 수 + 미스 수)번만 API 호출 (vs 기존 N번)
+   *  - 상품명 텍스트 검색 불안정성 제거
    */
   async scrapeListings(targets: ListingTarget[]): Promise<AdapterResult> {
+    if (targets.length === 0) return { succeeded: [], failed: [] };
+
+    // 1. 전체 카테고리 배치 검색으로 가격 맵 빌드
+    const priceMap = await this.buildPriceMap();
+    this.logger.log(`[가격갱신] 배치 맵 ${priceMap.size}개 빌드 완료, 타겟 ${targets.length}건 매핑 시작`);
+
     const succeeded: ScrapeResult[] = [];
     const failed: import('../interfaces/adapter.interface').FailedUrl[] = [];
 
     for (const target of targets) {
+      const nvMid = target.externalId;
+      const cached = priceMap.get(nvMid);
+
+      if (cached) {
+        // 배치 맵 히트 — URL은 기존 저장된 값 유지
+        succeeded.push({ ...cached, url: target.url || cached.url });
+        continue;
+      }
+
+      // 맵 미스 → 상품명으로 개별 fallback 검색
       try {
         await this.sleep();
-        const result = await this.scrapeOne(target);
+        const result = await this.scrapeOneFallback(target);
         succeeded.push(result);
       } catch (err) {
         const error = err as Error;
-        this.logger.warn(`[${target.url}] 가격 조회 실패: ${error.message}`);
+        this.logger.warn(`[가격갱신 fallback 실패] nvMid=${nvMid}: ${error.message}`);
         failed.push({
           url: target.url,
           listingId: target.listingId,
@@ -192,31 +235,41 @@ export class NaverShoppingApiAdapter implements ISiteAdapter {
   }
 
   /**
-   * URL 목록에서 가격 추출 (Discovery 후 상세 조회).
+   * URL 목록에서 가격 추출 (Playwright 기반 어댑터 호환용).
+   * discoverProducts()가 있으므로 processor가 이 경로를 건너뜀.
    */
   async scrapeUrls(urls: string[]): Promise<ScrapeResult[]> {
-    const targets: ListingTarget[] = urls.map(url => ({
-      listingId: 'discovery',
-      url,
-      externalId: this.extractNvMid(url) ?? '',
-    }));
-    const { succeeded } = await this.scrapeListings(targets);
-    return succeeded;
+    const map = await this.buildPriceMap();
+    const results: ScrapeResult[] = [];
+    for (const url of urls) {
+      const nvMid = this.extractNvMid(url);
+      if (nvMid && map.has(nvMid)) results.push(map.get(nvMid)!);
+    }
+    return results;
   }
 
   /**
    * 카테고리별 신규 상품 URL 목록 반환.
-   * Naver API 검색 결과 → catalog URL 형식으로 정규화.
    */
   async discoverProductUrls(categorySlug: string): Promise<string[]> {
+    const results = await this.discoverProducts(categorySlug);
+    return results.map((r) => r.url);
+  }
+
+  /**
+   * 카테고리 검색 결과를 ScrapeResult[] 로 직접 반환.
+   * processor가 이 메서드를 감지하면 scrapeUrls() 호출을 건너뜀.
+   */
+  async discoverProducts(categorySlug: string): Promise<ScrapeResult[]> {
     const keywords = CATEGORY_KEYWORDS[categorySlug];
     if (!keywords?.length) {
       this.logger.warn(`카테고리 "${categorySlug}" 키워드 없음`);
       return [];
     }
 
+    const minPrice = CATEGORY_MIN_PRICE[categorySlug] ?? 0;
     const seen = new Set<string>();
-    const urls: string[] = [];
+    const results: ScrapeResult[] = [];
 
     for (const keyword of keywords) {
       try {
@@ -224,58 +277,101 @@ export class NaverShoppingApiAdapter implements ISiteAdapter {
         const data = await this.searchProducts(keyword, 100, 1, 'sim');
 
         for (const item of data.items) {
-          const nvMid = item.productId;
-          if (!nvMid || seen.has(nvMid)) continue;
-          seen.add(nvMid);
-          urls.push(`https://search.shopping.naver.com/catalog/${nvMid}`);
+          if (!item.productId || seen.has(item.productId)) continue;
+          const result = this.itemToScrapeResult(item, minPrice);
+          if (!result) continue;
+          seen.add(item.productId);
+          results.push(result);
         }
 
-        this.logger.log(
-          `[Discovery] "${keyword}" → ${data.items.length}건 (누적 ${urls.length}개)`,
-        );
+        this.logger.log(`[Discovery] "${keyword}" → ${data.items.length}건 (누적 ${results.length}개)`);
       } catch (err) {
-        const error = err as Error;
-        this.logger.error(`[Discovery] "${keyword}" 검색 실패: ${error.message}`);
+        this.logger.error(`[Discovery] "${keyword}" 검색 실패: ${(err as Error).message}`);
       }
     }
 
-    this.logger.log(
-      `[네이버쇼핑 API] Discovery [${categorySlug}] 완료 → ${urls.length}개 URL`,
-    );
-    return urls;
+    this.logger.log(`[네이버쇼핑 API] Discovery [${categorySlug}] 완료 → ${results.length}개 상품`);
+    return results;
   }
 
   // ─── 내부 헬퍼 ──────────────────────────────────────────────────────────
 
-  private async scrapeOne(target: ListingTarget): Promise<ScrapeResult> {
+  /**
+   * 전체 카테고리 키워드를 순회하며 nvMid → ScrapeResult 맵 빌드.
+   * scrapeListings()의 배치 검색 기반.
+   */
+  private async buildPriceMap(): Promise<Map<string, ScrapeResult>> {
+    const map = new Map<string, ScrapeResult>();
+
+    for (const [slug, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+      const minPrice = CATEGORY_MIN_PRICE[slug] ?? 0;
+      for (const keyword of keywords) {
+        try {
+          await this.sleep();
+          const data = await this.searchProducts(keyword, 100, 1, 'sim');
+
+          for (const item of data.items) {
+            if (!item.productId || map.has(item.productId)) continue;
+            const result = this.itemToScrapeResult(item, minPrice);
+            if (result) map.set(item.productId, result);
+          }
+        } catch (err) {
+          this.logger.warn(`[buildPriceMap] "${keyword}" 실패: ${(err as Error).message}`);
+        }
+      }
+    }
+
+    return map;
+  }
+
+  /**
+   * 배치 맵 미스 시 상품명으로 개별 검색하는 fallback.
+   * display=100으로 충분한 결과를 확보해 nvMid 매칭 성공률을 높임.
+   */
+  private async scrapeOneFallback(target: ListingTarget): Promise<ScrapeResult> {
     const nvMid = target.externalId || this.extractNvMid(target.url);
-    if (!nvMid) {
-      throw new Error(`nvMid를 추출할 수 없음: ${target.url}`);
-    }
+    if (!nvMid) throw new Error(`nvMid 추출 불가: ${target.url}`);
 
-    // nvMid로 검색 → 일치 상품 찾기
-    const data = await this.searchProducts(nvMid, 10, 1, 'sim');
-    const item = data.items.find(i => i.productId === nvMid) ?? data.items[0];
+    if (!target.productName) throw new Error(`상품명 없음 — nvMid ${nvMid} fallback 불가`);
 
-    if (!item) {
-      throw new Error(`nvMid ${nvMid} 에 해당하는 상품 없음`);
-    }
+    const data = await this.searchProducts(target.productName, 100, 1, 'sim');
+    const item = data.items.find(i => i.productId === nvMid);
 
+    if (!item) throw new Error(`nvMid ${nvMid} 미발견 (query="${target.productName}")`);
+
+    const result = this.itemToScrapeResult(item);
+    if (!result) throw new Error(`가격 이상 또는 필터링됨: lprice="${item.lprice}"`);
+
+    return { ...result, url: target.url || result.url };
+  }
+
+  /** NaverShopItem → ScrapeResult 변환. 가격 이상·블랙리스트·최저가 미달이면 null 반환 */
+  private itemToScrapeResult(item: NaverShopItem, minPrice = 0): ScrapeResult | null {
     const price = parseInt(item.lprice, 10);
-    if (!price || isNaN(price) || price <= 0) {
-      throw new Error(`유효하지 않은 가격: lprice="${item.lprice}"`);
+    if (!price || isNaN(price) || price <= 0) return null;
+    if (price < minPrice) {
+      this.logger.debug(`[최저가 미달] 제외: ₩${price.toLocaleString()} < ₩${minPrice.toLocaleString()} — "${stripHtml(item.title).slice(0, 50)}"`);
+      return null;
+    }
+
+    const cleanTitle = stripHtml(item.title);
+    if (isKrBlacklisted(cleanTitle)) {
+      this.logger.debug(`[블랙리스트] 제외: "${cleanTitle.slice(0, 60)}"`);
+      return null;
     }
 
     return {
       externalId: item.productId,
-      url: `https://search.shopping.naver.com/catalog/${item.productId}`,
+      url: item.link ? decodeNaverLink(item.link) : `https://search.shopping.naver.com/catalog/${item.productId}`,
       price,
       currency: 'KRW',
-      inStock: true, // lprice 존재 = 판매 중
+      inStock: true,
       scrapedAt: new Date(),
       productName: stripHtml(item.title),
       brand: item.brand || item.maker || undefined,
       imageUrl: item.image || undefined,
+      mallName: item.mallName || undefined,
+      confidence: 'high',
     };
   }
 

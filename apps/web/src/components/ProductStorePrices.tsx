@@ -10,6 +10,7 @@ interface Listing {
   latestCurrency: string | null;
   latestOriginalPrice: string | null;
   inStock: boolean | null;
+  mallName?: string | null;
   store: { id: string; name: string; logoUrl: string | null };
 }
 
@@ -29,7 +30,7 @@ export function ProductLowestPrice({ listing }: { listing: Listing }) {
           </span>
         )}
       </div>
-      <div className="text-sm text-gray-400">{listing.store.name} 기준</div>
+      <div className="text-sm text-gray-400">{listing.mallName ?? listing.store.name} 기준</div>
     </div>
   );
 }
@@ -65,8 +66,15 @@ export function ProductStoreList({ listings }: { listings: Listing[] }) {
                 : 'bg-gray-900 border-gray-800 hover:border-gray-600'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <span className="font-medium text-sm">{listing.store.name}</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-medium text-sm">
+                {listing.mallName ?? listing.store.name}
+              </span>
+              {listing.mallName && (
+                <span className="text-xs text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">
+                  {listing.store.name}
+                </span>
+              )}
               {i === 0 && (
                 <span className="text-xs text-green-400 bg-green-400/10 px-2 py-0.5 rounded">최저가</span>
               )}
@@ -100,7 +108,14 @@ export function ProductStoreList({ listings }: { listings: Listing[] }) {
           rel="noopener noreferrer"
           className="flex items-center justify-between bg-gray-900 border border-gray-800 hover:border-gray-600 rounded-xl px-4 py-3 transition-colors"
         >
-          <span className="font-medium text-sm">{listing.store.name}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm">{listing.mallName ?? listing.store.name}</span>
+            {listing.mallName && (
+              <span className="text-xs text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">
+                {listing.store.name}
+              </span>
+            )}
+          </div>
           <span className="text-gray-500">—</span>
         </a>
       ))}

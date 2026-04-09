@@ -24,6 +24,8 @@ export const productListings = pgTable(
     // The store's own identifier (ASIN for Amazon, item number for Newegg, etc.)
     externalId: varchar('external_id', { length: 255 }).notNull(),
     url: text('url').notNull(),
+    // 네이버쇼핑 등 멀티몰 플랫폼에서의 실제 판매 쇼핑몰 이름 (G마켓, 11번가, 스마트스토어 등)
+    mallName: varchar('mall_name', { length: 100 }),
     isActive: boolean('is_active').notNull().default(true),
     // Tracks when crawler last successfully found this listing
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),

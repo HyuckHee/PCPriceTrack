@@ -35,6 +35,8 @@ export interface AdapterConfig {
 export abstract class BaseSiteAdapter implements ISiteAdapter {
   protected readonly logger: Logger;
   private browser: Browser | null = null;
+  /** Set to true when Chromium executable is not found on this host (e.g. Render). */
+  private chromiumUnavailable = false;
 
   readonly storeName: string;
   readonly storeId: string;
@@ -58,21 +60,50 @@ export abstract class BaseSiteAdapter implements ISiteAdapter {
 
   protected async getBrowser(): Promise<Browser> {
     if (!this.browser || !this.browser.isConnected()) {
-      this.browser = await chromium.launch({
-        headless: true,
-        proxy: this.proxyUrl ? { server: this.proxyUrl } : undefined,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-blink-features=AutomationControlled',
-          '--disable-features=IsolateOrigins,site-per-process',
-        ],
-      });
+      try {
+        this.browser = await chromium.launch({
+          headless: true,
+          proxy: this.proxyUrl ? { server: this.proxyUrl } : undefined,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=IsolateOrigins,site-per-process',
+          ],
+        });
+      } catch (err) {
+        const msg = (err as Error).message ?? '';
+        if (msg.includes("Executable doesn't exist") || msg.includes('Failed to launch')) {
+          this.chromiumUnavailable = true;
+          this.logger.warn(
+            `Playwright 실행 불가 (Chromium 미설치 환경): ${msg} — 크롤링을 건너뜁니다.`,
+          );
+          throw err; // re-throw so callers can gate on chromiumUnavailable
+        }
+        throw err;
+      }
     }
     return this.browser;
   }
 
+  /**
+   * Returns true when Chromium is not installed on this host (e.g. Render serverless).
+   * Subclasses should call this at the top of discoverProductUrls() and return [] early.
+   */
+  protected isChromiumUnavailable(): boolean {
+    return this.chromiumUnavailable;
+  }
+
   protected async createContext(): Promise<BrowserContext> {
+    // Attempt launch now if not yet tried, so the flag is set before callers proceed.
+    if (!this.chromiumUnavailable) {
+      await this.getBrowser().catch(() => {
+        // chromiumUnavailable is set inside getBrowser() on launch failure
+      });
+    }
+    if (this.chromiumUnavailable) {
+      throw new Error('Chromium 미설치 환경 — createContext 불가');
+    }
     const browser = await this.getBrowser();
     const userAgent = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 
@@ -175,6 +206,35 @@ export abstract class BaseSiteAdapter implements ISiteAdapter {
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
 
+  // ─── URL utilities ────────────────────────────────────────────────────────
+
+  /**
+   * URL에서 트래킹/세션 파라미터를 제거해 정규 URL을 반환합니다.
+   * 서브클래스에서 override 가능합니다.
+   *
+   * 제거 대상 파라미터:
+   *  - Amazon: dib, dib_tag, qid, sr, ref, tag, pf_rd_*, _encoding
+   *  - 공통:   utm_*, fbclid, gclid
+   */
+  protected cleanProductUrl(url: string): string {
+    try {
+      const u = new URL(url);
+      const TRACKING_PARAMS = [
+        // Amazon tracking
+        'dib', 'dib_tag', 'qid', 'sr', 'ref', 'ref_', 'tag',
+        'pf_rd_p', 'pf_rd_r', 'pf_rd_s', 'pf_rd_t', 'pf_rd_i', 'pf_rd_m',
+        '_encoding', 'sprefix', 'crid', 'keywords', 's',
+        // Universal tracking
+        'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+        'fbclid', 'gclid', 'msclkid',
+      ];
+      TRACKING_PARAMS.forEach((p) => u.searchParams.delete(p));
+      return u.toString();
+    } catch {
+      return url; // URL 파싱 실패 시 원본 반환
+    }
+  }
+
   // ─── Page helpers ─────────────────────────────────────────────────────────
 
   protected async openPage(context: BrowserContext, url: string): Promise<Page> {
@@ -224,6 +284,10 @@ export abstract class BaseSiteAdapter implements ISiteAdapter {
    * Used during discovery to get product details + prices for new URLs.
    */
   async scrapeUrls(urls: string[]): Promise<ScrapeResult[]> {
+    if (this.chromiumUnavailable) {
+      this.logger.warn(`[${this.storeName}] scrapeUrls 건너뜀 — Chromium 미설치 환경`);
+      return [];
+    }
     const targets: ListingTarget[] = urls.map((url) => ({
       listingId: 'discovery',
       url,
@@ -234,7 +298,21 @@ export abstract class BaseSiteAdapter implements ISiteAdapter {
   }
 
   async scrapeListings(targets: ListingTarget[]): Promise<AdapterResult> {
-    const context = await this.createContext();
+    if (this.chromiumUnavailable) {
+      this.logger.warn(`[${this.storeName}] scrapeListings 건너뜀 — Chromium 미설치 환경`);
+      return { succeeded: [], failed: [] };
+    }
+
+    let context: BrowserContext | null = null;
+    try {
+      context = await this.createContext();
+    } catch {
+      if (this.chromiumUnavailable) {
+        this.logger.warn(`[${this.storeName}] scrapeListings 건너뜀 — Chromium 미설치 환경`);
+        return { succeeded: [], failed: [] };
+      }
+      throw new Error('Browser context 생성 실패');
+    }
     const succeeded: ScrapeResult[] = [];
     const failed: FailedUrl[] = [];
 
@@ -242,7 +320,7 @@ export abstract class BaseSiteAdapter implements ISiteAdapter {
       const results = await this.runConcurrent(targets, async (target) => {
         try {
           const result = await this.withRetry(
-            () => this.scrapePage(context, target),
+            () => this.scrapePage(context!, target),
             `${target.url}`,
           );
           succeeded.push(result);
@@ -269,7 +347,7 @@ export abstract class BaseSiteAdapter implements ISiteAdapter {
 
       return { succeeded, failed };
     } finally {
-      await context.close();
+      await context?.close();
     }
   }
 }

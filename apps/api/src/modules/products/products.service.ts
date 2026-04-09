@@ -8,6 +8,15 @@ import { priceRecords } from '../../database/schema/price-records';
 import { stores } from '../../database/schema/stores';
 import { ListProductsDto } from './dto/list-products.dto';
 
+/** 통화별 적정 가격 범위 — 이 범위를 벗어나면 크롤링 오염 데이터로 간주 */
+const PRICE_SANITY_FILTER = sql.raw(`
+  AND (
+    (pr.currency = 'USD' AND pr.price::numeric BETWEEN 1 AND 7000)
+    OR
+    (pr.currency = 'KRW' AND pr.price::numeric BETWEEN 1000 AND 10000000)
+  )
+`);
+
 @Injectable()
 export class ProductsService {
   constructor(@Inject(DATABASE_TOKEN) private db: Database) {}
@@ -16,7 +25,7 @@ export class ProductsService {
     const { page = 1, limit = 20, categoryId, brand, search, minPrice, maxPrice } = dto;
     const offset = (page - 1) * limit;
 
-    // Subquery: lowest current price for a product
+    // Subquery: lowest current price for a product (비정상 가격 제외)
     const lowestPriceSub = sql<string>`(
       SELECT MIN(pr.price::numeric)
       FROM price_records pr
@@ -25,9 +34,10 @@ export class ProductsService {
         AND pr.recorded_at = (
           SELECT MAX(pr2.recorded_at) FROM price_records pr2 WHERE pr2.listing_id = pl.id
         )
+        ${PRICE_SANITY_FILTER}
     )`;
 
-    // Subquery: currency of the lowest-priced listing's latest record
+    // Subquery: currency of the lowest-priced listing's latest record (비정상 가격 제외)
     const lowestCurrencySub = sql<string>`(
       SELECT pr.currency
       FROM price_records pr
@@ -36,11 +46,12 @@ export class ProductsService {
         AND pr.recorded_at = (
           SELECT MAX(pr2.recorded_at) FROM price_records pr2 WHERE pr2.listing_id = pl.id
         )
+        ${PRICE_SANITY_FILTER}
       ORDER BY pr.price::numeric ASC
       LIMIT 1
     )`;
 
-    // Subquery: lowest price from the PREVIOUS crawl (rn=2) for discount calculation
+    // Subquery: lowest price from the PREVIOUS crawl (rn=2) for discount calculation (비정상 가격 제외)
     const previousLowestPriceSub = sql<string>`(
       SELECT MIN(rn2.price) FROM (
         SELECT pr.price::numeric AS price,
@@ -48,6 +59,7 @@ export class ProductsService {
         FROM price_records pr
         INNER JOIN product_listings pl ON pr.listing_id = pl.id
         WHERE pl.product_id = ${products.id}
+          ${PRICE_SANITY_FILTER}
       ) AS rn2 WHERE rn2.rn = 2
     )`;
 
@@ -226,6 +238,7 @@ export class ProductsService {
         url: productListings.url,
         externalId: productListings.externalId,
         lastSeenAt: productListings.lastSeenAt,
+        mallName: productListings.mallName,
         store: {
           id: stores.id,
           name: stores.name,
@@ -234,12 +247,14 @@ export class ProductsService {
         latestPrice: sql<string>`(
           SELECT pr.price FROM price_records pr
           WHERE pr.listing_id = ${productListings.id}
+            ${PRICE_SANITY_FILTER}
           ORDER BY pr.recorded_at DESC
           LIMIT 1
         )`,
         latestCurrency: sql<string>`(
           SELECT pr.currency FROM price_records pr
           WHERE pr.listing_id = ${productListings.id}
+            ${PRICE_SANITY_FILTER}
           ORDER BY pr.recorded_at DESC
           LIMIT 1
         )`,
@@ -247,12 +262,14 @@ export class ProductsService {
           SELECT pr.original_price FROM price_records pr
           WHERE pr.listing_id = ${productListings.id}
             AND pr.original_price IS NOT NULL
+            ${PRICE_SANITY_FILTER}
           ORDER BY pr.recorded_at DESC
           LIMIT 1
         )`,
         inStock: sql<boolean>`(
           SELECT pr.in_stock FROM price_records pr
           WHERE pr.listing_id = ${productListings.id}
+            ${PRICE_SANITY_FILTER}
           ORDER BY pr.recorded_at DESC
           LIMIT 1
         )`,
@@ -294,6 +311,11 @@ export class ProductsService {
         and(
           eq(productListings.productId, product[0].id),
           sql`${priceRecords.recordedAt} >= ${since}`,
+          sql`(
+            (${priceRecords.currency} = 'USD' AND ${priceRecords.price}::numeric BETWEEN 1 AND 7000)
+            OR
+            (${priceRecords.currency} = 'KRW' AND ${priceRecords.price}::numeric BETWEEN 1000 AND 10000000)
+          )`,
         ),
       )
       .orderBy(desc(priceRecords.recordedAt));

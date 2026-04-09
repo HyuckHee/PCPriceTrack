@@ -43,6 +43,13 @@
       "when": 1775211235554,
       "tag": "0005_parched_meteorite",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775704637114,
+      "tag": "0006_exotic_carmella_unuscione",
+      "breakpoints": true
     }
   ]
 }

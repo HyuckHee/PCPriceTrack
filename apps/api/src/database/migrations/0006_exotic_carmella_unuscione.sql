@@ -1,0 +1,1 @@
+ALTER TABLE "product_listings" ADD COLUMN "mall_name" varchar(100);

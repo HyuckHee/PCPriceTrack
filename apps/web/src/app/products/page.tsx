@@ -3,6 +3,7 @@ import { fetchProducts, fetchCategories, fetchDeals } from '@/lib/data';
 import { ProductCard } from '@/components/ProductCard';
 import { DealCard } from '@/components/DealCard';
 import { ProductFilters } from '@/components/ProductFilters';
+import { Pagination } from '@/components/Pagination';
 
 export const revalidate = 60;
 
@@ -70,23 +71,11 @@ export default async function ProductsPage({
         </div>
       )}
 
-      {meta.totalPages > 1 && (
-        <div className="flex gap-2 mt-8 justify-center flex-wrap">
-          {Array.from({ length: meta.totalPages }, (_, i) => i + 1).map((p) => (
-            <Link
-              key={p}
-              href={buildUrl({ page: String(p) })}
-              className={`px-3 py-1 rounded text-sm ${
-                p === meta.page
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-              }`}
-            >
-              {p}
-            </Link>
-          ))}
-        </div>
-      )}
+      <Pagination
+        currentPage={meta.page}
+        totalPages={meta.totalPages}
+        buildUrl={(p) => buildUrl({ page: p })}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { BrowserContext } from 'playwright';
 import { AbortError, BaseSiteAdapter } from './base.adapter';
 import { ListingTarget, ScrapeResult } from '../interfaces/adapter.interface';
+import { KR_BLACKLIST_KEYWORDS } from './kr-blacklist';
 
 /**
  * 11번가 어댑터.
@@ -134,19 +135,49 @@ export class ElevenStAdapter extends BaseSiteAdapter {
           .catch(() => undefined);
       }
 
+      // ── 정가 (취소선 가격) ────────────────────────────────────────────
+      // 11번가 정가 위치:
+      //   .price_info dd.normal_price  — 일반 상품 정상가
+      //   .origin_price                — 할인 전 정가
+      //   #orgPrcArea                  — 원가 영역
+      let originalPrice: number | undefined;
+      const originPriceText = await page
+        .$eval(
+          '.price_info dd.normal_price, .origin_price, #orgPrcArea .price, .c_prd_price .origin_price, dt.origin + dd',
+          (el: Element) => (el as HTMLElement).innerText?.trim() ?? '',
+        )
+        .catch(() => '');
+      if (originPriceText) {
+        const val = parseInt(originPriceText.replace(/[^0-9]/g, ''), 10);
+        if (!isNaN(val) && val > price) originalPrice = val;
+      }
+
       // ── 이미지 ───────────────────────────────────────────────────────
-      // 11번가 CDN: cdn.011st.com/11dims/resize/600x600/.../product/ID/B.webp
+      // 11번가는 lazy-load: 실제 URL이 data-src / data-original / data-lazy 등에 있음.
+      // 이미지 요청 차단 환경에서는 src가 no_image.gif placeholder로 남으므로
+      // lazy 속성을 우선 읽고, 없으면 src fallback. no_image는 버림.
       const imageUrl = await page
         .$eval(
-          'img[src*="cdn.011st.com/11dims"][src*="600x600"], img[src*="cdn.011st.com/11dims"][src*="11src/product"]',
-          (el: HTMLImageElement) => el.src,
+          [
+            'img[data-src*="cdn.011st.com"]',
+            'img[data-original*="cdn.011st.com"]',
+            'img[data-lazy*="cdn.011st.com"]',
+            'img[src*="cdn.011st.com/11dims/resize"]',
+          ].join(', '),
+          (el: HTMLImageElement) =>
+            el.getAttribute('data-src') ??
+            el.getAttribute('data-original') ??
+            el.getAttribute('data-lazy') ??
+            el.src,
         )
+        .then((url) => (url?.includes('no_image') || !url ? undefined : url))
         .catch(() => undefined);
 
       return {
         externalId,
         url: target.url,
         price,
+        originalPrice,
         currency: 'KRW',
         inStock,
         scrapedAt: new Date(),
@@ -172,7 +203,14 @@ export class ElevenStAdapter extends BaseSiteAdapter {
     const searchUrl = searchMap[categorySlug];
     if (!searchUrl) return [];
 
-    const context = await this.createContext();
+    const context = await this.createContext().catch((err) => {
+      if (this.isChromiumUnavailable()) return null;
+      throw err as Error;
+    });
+    if (!context) {
+      this.logger.warn(`[11번가] discoverProductUrls 건너뜀 — Chromium 미설치 환경`);
+      return [];
+    }
     const urls: string[] = [];
 
     try {
@@ -186,20 +224,41 @@ export class ElevenStAdapter extends BaseSiteAdapter {
       // JS 렌더링 대기 (상품 목록이 동적으로 로드됨)
       await page.waitForTimeout(6000);
 
-      const links = await page.$$eval(
+      // 상품명 포함해서 수집 — 블랙리스트 필터링에 사용
+      const rawItems = await page.$$eval(
         'a[href*="11st.co.kr/products/"]',
         (anchors: HTMLAnchorElement[]) =>
-          anchors
-            .map((a) => a.href.split('?')[0])          // 트래킹 파라미터 제거
-            .filter((href) => /\/products\/\d+/.test(href)), // 실제 상품 URL만
+          anchors.map((a) => ({
+            href: a.href.split('?')[0],
+            title: a.getAttribute('title') ?? a.textContent?.trim() ?? '',
+          })),
       );
 
-      urls.push(...new Set(links));
-      this.logger.log(`11번가: ${urls.length}개 URL 발견 (${categorySlug})`);
+      let filtered = 0;
+
+      for (const { href, title } of rawItems) {
+        if (!/\/products\/\d+/.test(href)) continue;
+        const isBlocked = KR_BLACKLIST_KEYWORDS.some((kw) =>
+          title.toLowerCase().includes(kw.toLowerCase()),
+        );
+        if (isBlocked) {
+          filtered++;
+          continue;
+        }
+        urls.push(href);
+      }
+
+      const deduped = [...new Set(urls)];
+      urls.length = 0;
+      urls.push(...deduped);
+
+      this.logger.log(
+        `11번가: ${urls.length}개 URL 발견 (${categorySlug}) — 블랙리스트 ${filtered}개 제외`,
+      );
     } catch (err) {
       this.logger.error(`11번가 Discovery 실패: ${(err as Error).message}`);
     } finally {
-      await context.close();
+      await context?.close();
     }
 
     return urls;

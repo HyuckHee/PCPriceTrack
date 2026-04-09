@@ -38,6 +38,33 @@ export class PriceIngestionService {
       alertsTriggered: 0,
     };
 
+    // ── 0. Sanity check — 비정상 가격 차단 ────────────────────────────────
+    if (!this.isPriceValid(result.price, result.currency)) {
+      this.logger.warn(
+        `[Sanity] 비정상 가격 차단 — listing=${listingId} price=${result.price} currency=${result.currency} confidence=${result.confidence ?? 'N/A'}`,
+      );
+      // listing lastSeenAt 만큼은 업데이트해 스케줄러가 재시도하지 않도록 함
+      await this.db
+        .update(productListings)
+        .set({ lastSeenAt: result.scrapedAt, updatedAt: new Date() })
+        .where(eq(productListings.id, listingId));
+      return summary;
+    }
+
+    // originalPrice sanity: 0 이하이거나 현재가의 3배 초과면 오염으로 간주
+    const sanitizedOriginalPrice =
+      result.originalPrice &&
+      result.originalPrice > 0 &&
+      result.originalPrice <= result.price * 3
+        ? result.originalPrice
+        : undefined;
+
+    if (result.originalPrice && !sanitizedOriginalPrice) {
+      this.logger.warn(
+        `[Sanity] 비정상 originalPrice 무시 — listing=${listingId} original=${result.originalPrice} current=${result.price}`,
+      );
+    }
+
     // ── 1. Fetch last recorded price ───────────────────────────────────────
     const [lastRecord] = await this.db
       .select({ price: priceRecords.price, inStock: priceRecords.inStock })
@@ -57,7 +84,9 @@ export class PriceIngestionService {
       await this.db.insert(priceRecords).values({
         listingId,
         price: newPrice,
-        originalPrice: result.originalPrice ? String(result.originalPrice.toFixed(2)) : undefined,
+        originalPrice: sanitizedOriginalPrice
+          ? String(sanitizedOriginalPrice.toFixed(2))
+          : undefined,
         currency: result.currency,
         inStock: result.inStock,
         recordedAt: result.scrapedAt,
@@ -65,7 +94,7 @@ export class PriceIngestionService {
       summary.priceRecorded = true;
       summary.priceChanged = true;
       this.logger.debug(
-        `Price recorded for listing ${listingId}: $${newPrice} (was ${lastRecord?.price ?? 'N/A'})`,
+        `Price recorded — listing=${listingId} price=${newPrice} was=${lastRecord?.price ?? 'N/A'} confidence=${result.confidence ?? 'N/A'}`,
       );
     }
 
@@ -76,6 +105,7 @@ export class PriceIngestionService {
         lastSeenAt: result.scrapedAt,
         failureCount: '0',
         updatedAt: new Date(),
+        ...(result.mallName ? { mallName: result.mallName } : {}),
       })
       .where(eq(productListings.id, listingId));
 
@@ -120,6 +150,18 @@ export class PriceIngestionService {
   }
 
   // ─── Private helpers ──────────────────────────────────────────────────────
+
+  /**
+   * 통화별 합리적 가격 범위 검사.
+   * 범위를 벗어나면 크롤러 파싱 오류로 간주한다.
+   */
+  private isPriceValid(price: number, currency: string): boolean {
+    if (!price || isNaN(price) || price <= 0) return false;
+    if (currency === 'USD') return price >= 1 && price <= 7_000;
+    if (currency === 'KRW') return price >= 1_000 && price <= 10_000_000;
+    // 알 수 없는 통화는 일단 허용 (로그는 남김)
+    return true;
+  }
 
   /**
    * Find all active alerts for the product linked to this listing,

@@ -34,18 +34,20 @@ export class NeweggAdapter extends BaseSiteAdapter {
 
       // ── Price extraction ───────────────────────────────────────────────
       let price: number | null = null;
+      let confidence: 'high' | 'medium' | 'low' = 'low';
 
       // Strategy 1: main price block (whole + fraction)
       const priceWhole = await page.$('.price-current strong');
-      const priceSup = await page.$('.price-current > sup');
-      const priceSub = await page.$('.price-current > span');
+      const priceSup   = await page.$('.price-current > sup');
+      const priceSub   = await page.$('.price-current > span');
 
       if (priceWhole) {
         const wholeText = (await priceWhole.innerText()).replace(/[^0-9]/g, '');
-        const supText = priceSup ? (await priceSup.innerText()).replace(/[^0-9]/g, '') : '00';
-        const subText = priceSub ? (await priceSub.innerText()).replace(/[^0-9.]/g, '') : '';
+        const supText   = priceSup ? (await priceSup.innerText()).replace(/[^0-9]/g, '') : '00';
+        const subText   = priceSub ? (await priceSub.innerText()).replace(/[^0-9.]/g, '') : '';
         const cents = subText || supText;
-        price = parseFloat(`${wholeText}.${cents.padStart(2, '0')}`);
+        price      = parseFloat(`${wholeText}.${cents.padStart(2, '0')}`);
+        confidence = 'medium';
       }
 
       // Strategy 2: JSON-LD structured data
@@ -53,10 +55,13 @@ export class NeweggAdapter extends BaseSiteAdapter {
         const ldJson = await page.$('script[type="application/ld+json"]');
         if (ldJson) {
           try {
-            const json = JSON.parse(await ldJson.innerText()) as Record<string, unknown>;
+            const json   = JSON.parse(await ldJson.innerText()) as Record<string, unknown>;
             const offers = json['offers'] as Record<string, unknown> | undefined;
             const offerPrice = offers?.['price'];
-            if (offerPrice) price = parseFloat(String(offerPrice));
+            if (offerPrice) {
+              price      = parseFloat(String(offerPrice));
+              confidence = 'high';
+            }
           } catch {
             // malformed JSON-LD — continue
           }
@@ -115,6 +120,7 @@ export class NeweggAdapter extends BaseSiteAdapter {
         productName,
         brand,
         imageUrl,
+        confidence,
       };
     } finally {
       await page.close();
@@ -133,7 +139,14 @@ export class NeweggAdapter extends BaseSiteAdapter {
     const categoryUrl = categoryMap[categorySlug];
     if (!categoryUrl) return [];
 
-    const context = await this.createContext();
+    const context = await this.createContext().catch((err) => {
+      if (this.isChromiumUnavailable()) return null;
+      throw err as Error;
+    });
+    if (!context) {
+      this.logger.warn(`[Newegg] discoverProductUrls 건너뜀 — Chromium 미설치 환경`);
+      return [];
+    }
     const urls: string[] = [];
 
     try {
@@ -158,7 +171,7 @@ export class NeweggAdapter extends BaseSiteAdapter {
     } catch (err) {
       this.logger.error(`Discovery failed for ${categorySlug}: ${(err as Error).message}`);
     } finally {
-      await context.close();
+      await context?.close();
     }
 
     return urls;
