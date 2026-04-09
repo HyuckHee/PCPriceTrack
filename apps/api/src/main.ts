@@ -15,11 +15,21 @@ import * as path from 'path';
 async function runMigrations() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) return;
-  const pool = new Pool({ connectionString: databaseUrl, ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false });
-  const db = drizzle(pool);
-  await migrate(db, { migrationsFolder: path.join(__dirname, 'database/migrations') });
-  await pool.end();
-  console.log('Migrations complete.');
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    connectionTimeoutMillis: 10_000,
+    idleTimeoutMillis: 10_000,
+  });
+  try {
+    const db = drizzle(pool);
+    await migrate(db, { migrationsFolder: path.join(__dirname, 'database/migrations') });
+    console.log('Migrations complete.');
+  } catch (err) {
+    console.error('Migration failed (non-fatal, app will continue):', err);
+  } finally {
+    await pool.end().catch(() => {});
+  }
 }
 
 async function bootstrap() {
