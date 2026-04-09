@@ -34,207 +34,108 @@ export class ProductsService {
     const { page = 1, limit = 20, categoryId, brand, search, minPrice, maxPrice } = dto;
     const offset = (page - 1) * limit;
 
-    // ── 핵심 서브쿼리: 그룹(또는 독립 제품) 단위 최저/최고가 ──────────────
-    // group_id가 있으면 같은 그룹의 모든 product_listings를 포함해 집계
-    const groupMinPriceSub = sql<string>`(
-      SELECT MIN(pr.price::numeric)
-      FROM price_records pr
-      INNER JOIN product_listings pl ON pr.listing_id = pl.id
-      INNER JOIN products p2          ON pl.product_id = p2.id
-      WHERE (
-        -- 그룹이면 같은 group_id, 독립 제품이면 자기 자신
-        (${products.groupId} IS NOT NULL AND p2.group_id = ${products.groupId})
-        OR
-        (${products.groupId} IS NULL AND p2.id = ${products.id})
+    // ── 동적 WHERE 조건 ────────────────────────────────────────────────────
+    const conds: ReturnType<typeof sql>[] = [
+      sql`(p.group_id IS NULL OR p.id = (SELECT MIN(p2.id) FROM products p2 WHERE p2.group_id = p.group_id))`,
+    ];
+    if (categoryId) conds.push(sql`p.category_id = ${categoryId}`);
+    if (brand)      conds.push(sql`p.brand ILIKE ${'%' + brand + '%'}`);
+    if (search)     conds.push(sql`(p.name ILIKE ${'%' + search + '%'} OR p.brand ILIKE ${'%' + search + '%'} OR p.model ILIKE ${'%' + search + '%'})`);
+
+    const whereSQL = sql.join(conds, sql` AND `);
+
+    // ── 가격 필터 HAVING ──────────────────────────────────────────────────
+    const havConds: ReturnType<typeof sql>[] = [];
+    if (minPrice !== undefined) havConds.push(sql`COALESCE(gp.min_price, 0) >= ${minPrice}`);
+    if (maxPrice !== undefined) havConds.push(sql`COALESCE(gp.min_price, 0) <= ${maxPrice}`);
+    const havingSQL = havConds.length ? sql`AND ${sql.join(havConds, sql` AND `)}` : sql``;
+
+    const mainQuery = sql`
+      WITH group_prices AS (
+        SELECT
+          COALESCE(p.group_id::text, p.id::text) AS group_key,
+          MIN(pr.price::numeric) FILTER (WHERE
+            (pr.currency = 'USD' AND pr.price::numeric BETWEEN 1 AND 7000) OR
+            (pr.currency = 'KRW' AND pr.price::numeric BETWEEN 1000 AND 10000000)
+          ) AS min_price,
+          MAX(pr.price::numeric) FILTER (WHERE
+            (pr.currency = 'USD' AND pr.price::numeric BETWEEN 1 AND 7000) OR
+            (pr.currency = 'KRW' AND pr.price::numeric BETWEEN 1000 AND 10000000)
+          ) AS max_price,
+          MIN(pr.currency) AS currency,
+          COUNT(DISTINCT pl.store_id) AS store_count,
+          STRING_AGG(DISTINCT s.name, ', ' ORDER BY s.name) AS store_names
+        FROM products p
+        INNER JOIN product_listings pl ON pl.product_id = p.id AND pl.is_active = true
+        INNER JOIN price_records pr ON pr.listing_id = pl.id
+          AND pr.recorded_at = (SELECT MAX(pr3.recorded_at) FROM price_records pr3 WHERE pr3.listing_id = pl.id)
+        INNER JOIN stores s ON pl.store_id = s.id
+        GROUP BY COALESCE(p.group_id::text, p.id::text)
+      ),
+      prev_prices AS (
+        SELECT
+          COALESCE(p.group_id::text, p.id::text) AS group_key,
+          MIN(ranked.price) AS prev_min_price
+        FROM (
+          SELECT pl.product_id,
+                 pr.price::numeric AS price,
+                 ROW_NUMBER() OVER (PARTITION BY pl.id ORDER BY pr.recorded_at DESC) AS rn
+          FROM price_records pr
+          INNER JOIN product_listings pl ON pr.listing_id = pl.id AND pl.is_active = true
+          WHERE (pr.currency = 'USD' AND pr.price::numeric BETWEEN 1 AND 7000)
+             OR (pr.currency = 'KRW' AND pr.price::numeric BETWEEN 1000 AND 10000000)
+        ) ranked
+        INNER JOIN products p ON p.id = ranked.product_id
+        WHERE ranked.rn = 2
+        GROUP BY COALESCE(p.group_id::text, p.id::text)
       )
-      AND pl.is_active = true
-      AND pr.recorded_at = (
-        SELECT MAX(pr2.recorded_at) FROM price_records pr2 WHERE pr2.listing_id = pl.id
-      )
-      ${PRICE_SANITY_FILTER}
-    )`;
+      SELECT
+        p.id, p.group_id AS "groupId", p.name, p.brand, p.model, p.slug,
+        p.image_url AS "imageUrl", p.specs, p.created_at AS "createdAt",
+        c.id AS "cat_id", c.name AS "cat_name", c.slug AS "cat_slug",
+        pg.id AS "grp_id", pg.name AS "grp_name", pg.slug AS "grp_slug",
+        gp.min_price AS "minPrice", gp.max_price AS "maxPrice",
+        gp.currency, gp.store_count AS "storeCount", gp.store_names AS "storeNames",
+        pp.prev_min_price AS "previousMinPrice"
+      FROM products p
+      INNER JOIN categories c ON c.id = p.category_id
+      LEFT JOIN product_groups pg ON pg.id = p.group_id
+      LEFT JOIN group_prices gp ON gp.group_key = COALESCE(p.group_id::text, p.id::text)
+      LEFT JOIN prev_prices pp ON pp.group_key = COALESCE(p.group_id::text, p.id::text)
+      WHERE ${whereSQL}
+      ${havingSQL}
+    `;
 
-    const groupMaxPriceSub = sql<string>`(
-      SELECT MAX(pr.price::numeric)
-      FROM price_records pr
-      INNER JOIN product_listings pl ON pr.listing_id = pl.id
-      INNER JOIN products p2          ON pl.product_id = p2.id
-      WHERE (
-        (${products.groupId} IS NOT NULL AND p2.group_id = ${products.groupId})
-        OR
-        (${products.groupId} IS NULL AND p2.id = ${products.id})
-      )
-      AND pl.is_active = true
-      AND pr.recorded_at = (
-        SELECT MAX(pr2.recorded_at) FROM price_records pr2 WHERE pr2.listing_id = pl.id
-      )
-      ${PRICE_SANITY_FILTER}
-    )`;
-
-    const groupCurrencySub = sql<string>`(
-      SELECT pr.currency
-      FROM price_records pr
-      INNER JOIN product_listings pl ON pr.listing_id = pl.id
-      INNER JOIN products p2          ON pl.product_id = p2.id
-      WHERE (
-        (${products.groupId} IS NOT NULL AND p2.group_id = ${products.groupId})
-        OR
-        (${products.groupId} IS NULL AND p2.id = ${products.id})
-      )
-      AND pl.is_active = true
-      AND pr.recorded_at = (
-        SELECT MAX(pr2.recorded_at) FROM price_records pr2 WHERE pr2.listing_id = pl.id
-      )
-      ${PRICE_SANITY_FILTER}
-      ORDER BY pr.price::numeric ASC
-      LIMIT 1
-    )`;
-
-    const groupStoreCountSub = sql<number>`(
-      SELECT COUNT(DISTINCT pl.store_id)
-      FROM product_listings pl
-      INNER JOIN products p2 ON pl.product_id = p2.id
-      WHERE (
-        (${products.groupId} IS NOT NULL AND p2.group_id = ${products.groupId})
-        OR
-        (${products.groupId} IS NULL AND p2.id = ${products.id})
-      )
-      AND pl.is_active = true
-    )`;
-
-    const groupStoreNamesSub = sql<string>`(
-      SELECT STRING_AGG(DISTINCT s.name, ', ' ORDER BY s.name)
-      FROM product_listings pl
-      INNER JOIN products p2 ON pl.product_id = p2.id
-      INNER JOIN stores s    ON pl.store_id = s.id
-      WHERE (
-        (${products.groupId} IS NOT NULL AND p2.group_id = ${products.groupId})
-        OR
-        (${products.groupId} IS NULL AND p2.id = ${products.id})
-      )
-      AND pl.is_active = true
-    )`;
-
-    const previousGroupMinPriceSub = sql<string>`(
-      SELECT MIN(rn2.price) FROM (
-        SELECT pr.price::numeric AS price,
-               RANK() OVER (PARTITION BY pr.listing_id ORDER BY pr.recorded_at DESC) AS rn
-        FROM price_records pr
-        INNER JOIN product_listings pl ON pr.listing_id = pl.id
-        INNER JOIN products p2          ON pl.product_id = p2.id
-        WHERE (
-          (${products.groupId} IS NOT NULL AND p2.group_id = ${products.groupId})
-          OR
-          (${products.groupId} IS NULL AND p2.id = ${products.id})
-        )
-        ${PRICE_SANITY_FILTER}
-      ) AS rn2 WHERE rn2.rn = 2
-    )`;
-
-    // ── 그룹의 대표 이미지/이름 (group 우선, 없으면 product) ──────────────
-    const displayNameSub = sql<string>`(
-      SELECT COALESCE(pg.name, ${products.name})
-      FROM products p3
-      LEFT JOIN product_groups pg ON p3.group_id = pg.id
-      WHERE p3.id = ${products.id}
-      LIMIT 1
-    )`;
-
-    const displayImageSub = sql<string>`(
-      SELECT COALESCE(pg.image_url, ${products.imageUrl})
-      FROM products p3
-      LEFT JOIN product_groups pg ON p3.group_id = pg.id
-      WHERE p3.id = ${products.id}
-      LIMIT 1
-    )`;
-
-    // ── WHERE 조건 ──────────────────────────────────────────────────────────
-    // 그룹이 있는 경우 그룹의 첫 번째 product(대표)만 리스트에 표시
-    const isGroupRepresentative = sql<boolean>`(
-      ${products.groupId} IS NULL
-      OR ${products.id} = (
-        SELECT MIN(p_inner.id)
-        FROM products p_inner
-        WHERE p_inner.group_id = ${products.groupId}
-      )
-    )`;
-
-    const conditions: ReturnType<typeof eq>[] = [isGroupRepresentative as any];
-    if (categoryId) conditions.push(eq(products.categoryId, categoryId) as any);
-    if (brand) conditions.push(ilike(products.brand, `%${brand}%`) as any);
-    if (search) {
-      conditions.push(
-        or(
-          ilike(products.name, `%${search}%`),
-          ilike(products.brand, `%${search}%`),
-          ilike(products.model, `%${search}%`),
-        ) as any,
-      );
-    }
-    if (minPrice !== undefined) {
-      conditions.push(sql`${groupMinPriceSub} >= ${minPrice}` as any);
-    }
-    if (maxPrice !== undefined) {
-      conditions.push(sql`${groupMaxPriceSub} <= ${maxPrice}` as any);
-    }
-
-    const where = and(...conditions);
-
-    const [rows, countResult] = await Promise.all([
-      this.db
-        .select({
-          id: products.id,
-          groupId: products.groupId,
-          name: products.name,
-          brand: products.brand,
-          model: products.model,
-          slug: products.slug,
-          imageUrl: products.imageUrl,
-          specs: products.specs,
-          category: {
-            id: categories.id,
-            name: categories.name,
-            slug: categories.slug,
-          },
-          // 그룹 정보 (있을 경우)
-          group: {
-            id: productGroups.id,
-            name: productGroups.name,
-            slug: productGroups.slug,
-          },
-          // 가격 범위
-          minPrice: groupMinPriceSub,
-          maxPrice: groupMaxPriceSub,
-          currency: groupCurrencySub,
-          previousMinPrice: previousGroupMinPriceSub,
-          // 스토어 정보
-          storeCount: groupStoreCountSub,
-          storeNames: groupStoreNamesSub,
-          createdAt: products.createdAt,
-        })
-        .from(products)
-        .innerJoin(categories, eq(products.categoryId, categories.id))
-        .leftJoin(productGroups, eq(products.groupId, productGroups.id))
-        .where(where)
-        .orderBy(desc(products.createdAt))
-        .limit(limit)
-        .offset(offset),
-
-      this.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(products)
-        .innerJoin(categories, eq(products.categoryId, categories.id))
-        .where(where),
+    const [dataResult, countResult] = await Promise.all([
+      this.db.execute(sql`${mainQuery} ORDER BY p.created_at DESC LIMIT ${limit} OFFSET ${offset}`),
+      this.db.execute(sql`SELECT COUNT(*)::int AS count FROM (${mainQuery}) AS sub`),
     ]);
+
+    const rows = (dataResult.rows as Record<string, unknown>[]).map((r) => ({
+      id: r.id as string,
+      groupId: r.groupId as string | null,
+      name: r.name as string,
+      brand: r.brand as string,
+      model: r.model as string,
+      slug: r.slug as string,
+      imageUrl: r.imageUrl as string | null,
+      specs: r.specs as Record<string, unknown>,
+      createdAt: r.createdAt as Date,
+      category: { id: r.cat_id as string, name: r.cat_name as string, slug: r.cat_slug as string },
+      group: r.grp_id ? { id: r.grp_id as string, name: r.grp_name as string, slug: r.grp_slug as string } : null,
+      minPrice: r.minPrice != null ? String(r.minPrice) : null,
+      maxPrice: r.maxPrice != null ? String(r.maxPrice) : null,
+      currency: r.currency as string | null,
+      previousMinPrice: r.previousMinPrice != null ? String(r.previousMinPrice) : null,
+      storeCount: r.storeCount != null ? Number(r.storeCount) : null,
+      storeNames: r.storeNames as string | null,
+    }));
+
+    const total = Number((countResult.rows[0] as Record<string, unknown>).count ?? 0);
 
     return {
       data: rows,
-      meta: {
-        total: countResult[0].count,
-        page,
-        limit,
-        totalPages: Math.ceil(countResult[0].count / limit),
-      },
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
 
