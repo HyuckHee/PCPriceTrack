@@ -199,7 +199,7 @@ export class ProductsService {
         meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
       };
     } catch (e) {
-      throw new Error(`list() SQL error: ${(e as Error).message}`);
+      throw e;
     }
   }
 

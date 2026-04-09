@@ -37,9 +37,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = exceptionResponse as string;
         error = exception.name;
       }
-    } else if (exception instanceof Error) {
-      message = exception.message;
-      error = exception.constructor.name;
     }
 
     const body: ErrorResponse = {
