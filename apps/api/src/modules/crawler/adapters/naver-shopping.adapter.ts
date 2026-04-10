@@ -360,10 +360,14 @@ export class NaverShoppingApiAdapter implements ISiteAdapter {
       return null;
     }
 
+    const hprice = parseInt(item.hprice, 10);
+    const originalPrice = hprice > price ? hprice : undefined;
+
     return {
       externalId: item.productId,
       url: item.link ? decodeNaverLink(item.link) : `https://search.shopping.naver.com/catalog/${item.productId}`,
       price,
+      originalPrice,
       currency: 'KRW',
       inStock: true,
       scrapedAt: new Date(),
