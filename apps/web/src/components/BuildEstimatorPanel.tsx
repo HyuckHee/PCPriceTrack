@@ -287,6 +287,10 @@ export default function BuildEstimatorPanel() {
       setFlashCat(cat);
       setTimeout(() => setFlashCat(null), 800);
       toast.success(`${catLabel[cat]} 교체됨!`);
+      if (newTotal > estimate.budget) {
+        const over = newTotal - estimate.budget;
+        toast.warning(`예산 초과! ${formatPrice(convertPrice(over, payload.currency, currency, usdToKrw), currency)} 초과됩니다.`);
+      }
     } catch { /* ignore */ }
   }
 
