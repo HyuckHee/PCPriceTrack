@@ -93,7 +93,9 @@ export default function BuildEstimatorPanel() {
   // 전역 드래그 감지 — 상품 카드 드래그 시작/종료
   useEffect(() => {
     const onStart = (e: DragEvent) => {
-      if (e.dataTransfer?.types.includes(DRAG_TYPE)) setIsDragging(true);
+      // DOMStringList는 .includes()가 없으므로 Array.from() 사용
+      const types = e.dataTransfer?.types;
+      if (types && Array.from(types).includes(DRAG_TYPE)) setIsDragging(true);
     };
     const onEnd = () => { setIsDragging(false); setDropTarget(null); };
     document.addEventListener('dragstart', onStart);
@@ -216,7 +218,7 @@ export default function BuildEstimatorPanel() {
   }
 
   function handleDragOver(e: React.DragEvent, cat: string) {
-    if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+    // types 체크를 하지 않고 항상 preventDefault — 이것이 없으면 drop 이벤트가 발생하지 않음
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     setDropTarget(cat);

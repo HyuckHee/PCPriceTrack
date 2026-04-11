@@ -71,7 +71,6 @@ export default function BuildDetailSidebar() {
   }
 
   function handleDragOver(e: React.DragEvent, cat: string) {
-    if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     setDropTarget(cat);
