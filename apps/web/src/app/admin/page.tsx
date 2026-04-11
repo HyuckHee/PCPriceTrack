@@ -10,7 +10,14 @@ const CATEGORIES = ['gpu', 'cpu', 'ram', 'ssd', 'motherboard', 'psu', 'case', 'c
 const NAVER_KEYWORDS_PER_CATEGORY: Record<string, number> = {
   gpu: 9, cpu: 6, ram: 4, ssd: 4, motherboard: 4, psu: 3, case: 3, cooler: 3,
 };
-const DISCOVERY_CATEGORIES = ['gpu', 'cpu', 'ram', 'ssd'];
+
+/** 스케줄 키별 Discovery 대상 카테고리 (빈 배열 = 전체) */
+const SCHEDULE_CATEGORY_KEYWORDS: Record<string, string[]> = {
+  'schedule.high_volatility': ['gpu', 'cpu'],
+  'schedule.medium_volatility': ['ram', 'ssd'],
+  'schedule.low_volatility': ['motherboard', 'psu', 'cooler', 'case'],
+  'schedule.nightly': ['gpu', 'cpu', 'ram', 'ssd', 'motherboard', 'psu', 'cooler', 'case'],
+};
 
 /** cron 표현식에서 하루 실행 횟수 추정 */
 function estimateDailyRuns(cronExpr: string): number {
@@ -26,16 +33,17 @@ function estimateDailyRuns(cronExpr: string): number {
 }
 
 function calcNaverUsage(schedules: ScheduleConfig[], naverListingCount: number) {
-  const discoveryKeywords = DISCOVERY_CATEGORIES.reduce(
-    (sum, cat) => sum + (NAVER_KEYWORDS_PER_CATEGORY[cat] ?? 0), 0,
-  );
-
+  let discoveryCallsPerDay = 0;
   let totalRuns = 0;
+
   for (const s of schedules) {
-    totalRuns += estimateDailyRuns(s.cronExpr);
+    const runs = estimateDailyRuns(s.cronExpr);
+    totalRuns += runs;
+    const cats = SCHEDULE_CATEGORY_KEYWORDS[s.key] ?? [];
+    const keywords = cats.reduce((sum, cat) => sum + (NAVER_KEYWORDS_PER_CATEGORY[cat] ?? 0), 0);
+    discoveryCallsPerDay += runs * keywords;
   }
 
-  const discoveryCallsPerDay = totalRuns * discoveryKeywords;
   const refreshCallsPerDay = totalRuns * naverListingCount;
   const total = discoveryCallsPerDay + refreshCallsPerDay;
 

@@ -19,18 +19,31 @@ const DEFAULTS: Record<string, { label: string; cron: string; description: strin
   'schedule.high_volatility': {
     label: 'GPU / CPU',
     cron: '0 0 */3 * * *',
-    description: '고변동 카테고리 (GPU/CPU/메인보드/파워/쿨러/케이스) 크롤링 주기',
+    description: '고변동 카테고리 (GPU/CPU) 크롤링 주기',
   },
   'schedule.medium_volatility': {
     label: 'RAM / SSD',
     cron: '0 0 */8 * * *',
     description: '중변동 카테고리 (RAM/SSD) 크롤링 주기',
   },
+  'schedule.low_volatility': {
+    label: '메인보드 / 파워 / 쿨러 / 케이스',
+    cron: '0 0 */12 * * *',
+    description: '저변동 카테고리 (메인보드/파워/쿨러/케이스) 크롤링 주기',
+  },
   'schedule.nightly': {
     label: '야간 전체 동기화',
     cron: '0 0 2 * * *',
     description: '매일 새벽 2시 전체 카탈로그 동기화',
   },
+};
+
+/** 스케줄 키별 Discovery 대상 카테고리 (빈 배열 = 전체) */
+const SCHEDULE_CATEGORIES: Record<string, string[]> = {
+  'schedule.high_volatility': ['gpu', 'cpu'],
+  'schedule.medium_volatility': ['ram', 'ssd'],
+  'schedule.low_volatility': ['motherboard', 'psu', 'cooler', 'case'],
+  'schedule.nightly': [], // 전체
 };
 
 @Injectable()
@@ -106,7 +119,11 @@ export class CrawlerScheduleService implements OnModuleInit {
   async runNow(key: string): Promise<{ enqueued: number }> {
     if (!DEFAULTS[key]) throw new Error(`알 수 없는 스케줄 키: ${key}`);
     this.logger.log(`수동 즉시 실행: ${key}`);
-    return this.crawlerService.enqueueAllStores({ triggeredBy: 'manual', note: `${key}:manual` });
+    const categories = SCHEDULE_CATEGORIES[key];
+    return this.crawlerService.enqueueAllStores(
+      { triggeredBy: 'manual', note: `${key}:manual` },
+      categories?.length ? categories : undefined,
+    );
   }
 
   /** 스케줄 기본값으로 리셋 */
@@ -141,10 +158,14 @@ export class CrawlerScheduleService implements OnModuleInit {
       // 없으면 무시
     }
 
+    const categories = SCHEDULE_CATEGORIES[key];
     const job = new CronJob(cronExpr, async () => {
       this.logger.log(`크론 실행: ${key}`);
       try {
-        await this.crawlerService.enqueueAllStores({ triggeredBy: 'cron', note: key });
+        await this.crawlerService.enqueueAllStores(
+          { triggeredBy: 'cron', note: key },
+          categories?.length ? categories : undefined,
+        );
       } catch (err) {
         this.logger.error(`크론 실행 오류 [${key}]: ${(err as Error).message}`);
       }

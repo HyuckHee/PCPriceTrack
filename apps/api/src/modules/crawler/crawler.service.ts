@@ -37,13 +37,18 @@ export class CrawlerService {
   /**
    * Enqueue crawl jobs for every active store that has a registered adapter.
    * Runs both discovery (new products) and full_store (price refresh) jobs.
+   * @param categories - optional subset of category slugs to discover; defaults to all DISCOVERY_CATEGORIES
    */
-  async enqueueAllStores(options: EnqueueOptions): Promise<{ enqueued: number }> {
+  async enqueueAllStores(
+    options: EnqueueOptions,
+    categories?: string[],
+  ): Promise<{ enqueued: number }> {
     const activeStores = await this.db
       .select()
       .from(stores)
       .where(eq(stores.isActive, true));
 
+    const categoriesToCrawl = categories ?? [...DISCOVERY_CATEGORIES];
     let enqueued = 0;
 
     for (const store of activeStores) {
@@ -60,8 +65,8 @@ export class CrawlerService {
         continue;
       }
 
-      // Enqueue discovery for each category
-      for (const categorySlug of DISCOVERY_CATEGORIES) {
+      // Enqueue discovery only for the specified categories
+      for (const categorySlug of categoriesToCrawl) {
         await this.enqueueDiscovery(store.id, categorySlug, options);
       }
 
