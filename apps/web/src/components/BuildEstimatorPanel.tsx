@@ -93,15 +93,20 @@ export default function BuildEstimatorPanel() {
   // 전역 드래그 감지 — 상품 카드 드래그 시작/종료
   useEffect(() => {
     const onStart = (e: DragEvent) => {
-      // DOMStringList는 .includes()가 없으므로 Array.from() 사용
       const types = e.dataTransfer?.types;
-      if (types && Array.from(types).includes(DRAG_TYPE)) setIsDragging(true);
+      if (types && Array.from(types).includes(DRAG_TYPE)) {
+        setIsDragging(true);
+        try {
+          const raw = e.dataTransfer!.getData(DRAG_TYPE);
+          draggingCategory.current = (JSON.parse(raw) as DragProductPayload).categorySlug;
+        } catch { draggingCategory.current = null; }
+      }
     };
     const onEnd = () => {
       setIsDragging(false);
-      setDropTarget(null);
       setIsDragOverPanel(false);
       panelDragCount.current = 0;
+      draggingCategory.current = null;
     };
     document.addEventListener('dragstart', onStart);
     document.addEventListener('dragend', onEnd);
@@ -133,7 +138,7 @@ export default function BuildEstimatorPanel() {
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOverPanel, setIsDragOverPanel] = useState(false);
   const panelDragCount = useRef(0);
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const draggingCategory = useRef<string | null>(null); // dragstart 시 카테고리 저장
   const [flashCat, setFlashCat] = useState<string | null>(null);
 
   useEffect(() => {
@@ -239,39 +244,28 @@ export default function BuildEstimatorPanel() {
     if (panelDragCount.current === 0) setIsDragOverPanel(false);
   }
 
-  function handleDragOver(e: React.DragEvent, cat: string) {
-    // types 체크를 하지 않고 항상 preventDefault — 이것이 없으면 drop 이벤트가 발생하지 않음
+  // 패널 어디에 드랍해도 categorySlug로 자동 교체
+  function handlePanelDrop(e: React.DragEvent) {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    setDropTarget(cat);
-  }
-
-  function handleDragLeave(e: React.DragEvent) {
-    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
-      setDropTarget(null);
-    }
-  }
-
-  function handleDrop(e: React.DragEvent, cat: string) {
-    e.preventDefault();
-    setDropTarget(null);
     setIsDragging(false);
+    setIsDragOverPanel(false);
+    panelDragCount.current = 0;
+    draggingCategory.current = null;
+
     const raw = e.dataTransfer.getData(DRAG_TYPE);
     if (!raw) return;
     try {
       const payload = JSON.parse(raw) as DragProductPayload;
-      if (payload.categorySlug !== cat) {
-        toast.error(`이 슬롯은 ${CATEGORY_ICONS[cat]} ${cat.toUpperCase()} 전용입니다.`);
-        return;
-      }
+      const cat = payload.categorySlug;
+      const catLabel: Record<string, string> = { gpu: '그래픽카드', cpu: 'CPU', ram: '메모리', ssd: 'SSD' };
+      if (!catLabel[cat]) return;
       if (!estimate) {
         toast.error('먼저 견적을 계산한 후 교체해주세요.');
         return;
       }
-      const catLabel: Record<string, string> = { gpu: '그래픽카드', cpu: 'CPU', ram: '메모리', ssd: 'SSD' };
       const newComp: BuildComponent = {
         category: cat,
-        categoryName: catLabel[cat] ?? cat,
+        categoryName: catLabel[cat],
         productId: payload.productId,
         productName: payload.productName,
         slug: payload.slug,
@@ -289,14 +283,11 @@ export default function BuildEstimatorPanel() {
       if (!newComponents.find((c) => c?.category === cat)) newComponents.push(newComp);
       const newTotal = newComponents.reduce((s, c) => s + (c?.price ?? 0), 0);
       setEstimate({ ...estimate, components: newComponents, totalPrice: newTotal });
-      // Invalidate swap cache for this category
       setSwapAlts((prev) => { const next = { ...prev }; delete next[cat]; return next; });
       setFlashCat(cat);
       setTimeout(() => setFlashCat(null), 800);
-      toast.success(`${catLabel[cat] ?? cat} 교체됨!`);
-    } catch {
-      // ignore
-    }
+      toast.success(`${catLabel[cat]} 교체됨!`);
+    } catch { /* ignore */ }
   }
 
   function handleTabChange(t: 'estimate' | 'saved') {
@@ -329,6 +320,7 @@ export default function BuildEstimatorPanel() {
       onDragEnter={handlePanelDragEnter}
       onDragLeave={handlePanelDragLeave}
       onDragOver={(e) => e.preventDefault()}
+      onDrop={handlePanelDrop}
       className={`fixed z-50 flex flex-col bg-gray-900 border border-gray-700 rounded-xl shadow-2xl transition-opacity duration-200 select-none overflow-hidden ${
         isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
       }`}
@@ -431,18 +423,15 @@ export default function BuildEstimatorPanel() {
                   return (
                     <div
                       key={cat}
-                      onDragOver={(e) => handleDragOver(e, cat)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, cat)}
                       className={`rounded-lg border transition-all duration-300 ${
                         flashCat === cat
                           ? 'bg-green-900/30 border-green-500 ring-2 ring-green-500/60 scale-[1.02]'
-                          : dropTarget === cat
+                          : isDragOverPanel && draggingCategory.current === cat
                           ? 'bg-blue-900/20 border-blue-500/60 ring-1 ring-blue-500/40'
                           : comp
                           ? 'bg-gray-800 border-gray-700'
                           : 'bg-gray-800/40 border-gray-700/50 opacity-60'
-                      } ${swapTarget === cat && flashCat !== cat && dropTarget !== cat ? 'border-blue-500/70' : ''}`}
+                      } ${swapTarget === cat && flashCat !== cat ? 'border-blue-500/70' : ''}`}
                     >
                       <div className="p-2.5">
                         <div className="flex items-center gap-1.5 mb-1">
@@ -455,10 +444,10 @@ export default function BuildEstimatorPanel() {
                               {comp.inStock ? '재고있음' : '품절'}
                             </span>
                           )}
-                          {dropTarget === cat ? (
-                            <span className="ml-auto text-xs text-blue-400 font-medium animate-pulse">← 놓기</span>
+                          {isDragOverPanel && draggingCategory.current === cat ? (
+                            <span className="ml-auto text-xs text-blue-400 font-medium animate-pulse">← 교체됨</span>
                           ) : isDragging ? (
-                            <span className="ml-auto text-xs text-gray-500">↑ 여기에 드롭</span>
+                            <span className="ml-auto text-xs text-gray-500 text-[10px]">패널에 놓기</span>
                           ) : (
                             <button
                               onClick={() => handleSwapOpen(cat, comp)}
