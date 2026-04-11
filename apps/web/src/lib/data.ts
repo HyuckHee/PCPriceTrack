@@ -11,8 +11,9 @@ import {
   getMockProductsResponse,
 } from './mock-data';
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
-const IS_DEMO = !apiUrl || apiUrl.includes('localhost');
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'https://pcpricetrack.onrender.com/api';
+// 서버 환경이나 프로덕션 환경에서는 항상 mock 데이터 대신 실제 API를 사용하도록 강제합니다.
+const IS_DEMO = false;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -134,14 +135,12 @@ export async function fetchProducts(params: {
   if (params.minPrice) query.set('minPrice', params.minPrice);
   if (params.maxPrice) query.set('maxPrice', params.maxPrice);
 
-  return api
-    .get<ProductsResponse>(`/products?${query}`)
-    .catch(() => getMockProductsResponse({ ...params, limit: 24 }) as unknown as ProductsResponse);
+  return api.get<ProductsResponse>(`/products?${query}`);
 }
 
 export async function fetchCategories(): Promise<Category[]> {
   if (IS_DEMO) return MOCK_CATEGORIES;
-  return api.get<Category[]>('/categories').catch(() => MOCK_CATEGORIES);
+  return api.get<Category[]>('/categories');
 }
 
 export async function fetchDeals(limit: number, categoryId?: string): Promise<Deal[]> {
@@ -152,7 +151,7 @@ export async function fetchDeals(limit: number, categoryId?: string): Promise<De
     return filtered.slice(0, limit) as Deal[];
   }
   const qs = `/products/deals?limit=${limit}${categoryId ? `&categoryId=${categoryId}` : ''}`;
-  return api.get<Deal[]>(qs).catch(() => MOCK_DEALS.slice(0, limit) as Deal[]);
+  return api.get<Deal[]>(qs);
 }
 
 export async function fetchProduct(slug: string): Promise<ProductDetail | null> {
@@ -162,15 +161,13 @@ export async function fetchProduct(slug: string): Promise<ProductDetail | null> 
   try {
     return await api.get<ProductDetail>(`/products/${slug}`);
   } catch {
-    return (MOCK_PRODUCT_DETAILS[slug] as ProductDetail) ?? null;
+    return null;
   }
 }
 
 export async function fetchPriceHistory(slug: string): Promise<PriceRecord[]> {
   if (IS_DEMO) return getMockPriceHistory(slug) as PriceRecord[];
-  return api
-    .get<PriceRecord[]>(`/products/${slug}/price-history?days=30`)
-    .catch(() => getMockPriceHistory(slug) as PriceRecord[]);
+  return api.get<PriceRecord[]>(`/products/${slug}/price-history?days=30`);
 }
 
 // ── Build Estimator ────────────────────────────────────────────────────────────
@@ -231,6 +228,23 @@ export async function saveBuild(
     return await api.post<SavedBuild>('/builds', { name, budget, currency, totalPrice, components }, token);
   } catch {
     return null;
+  }
+}
+
+export async function fetchBuildAlternatives(
+  category: string,
+  budget: number,
+  currency: string,
+  excludeId?: string,
+  limit = 5,
+): Promise<BuildComponent[]> {
+  try {
+    const params = new URLSearchParams({ category, budget: String(budget), currency });
+    if (excludeId) params.set('excludeId', excludeId);
+    if (limit !== 5) params.set('limit', String(limit));
+    return await api.get<BuildComponent[]>(`/builds/alternatives?${params}`);
+  } catch {
+    return [];
   }
 }
 

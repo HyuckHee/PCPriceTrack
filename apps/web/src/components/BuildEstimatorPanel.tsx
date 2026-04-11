@@ -10,6 +10,7 @@ import {
   BuildComponent,
   BuildEstimate,
   fetchBuildEstimate,
+  fetchBuildAlternatives,
   saveBuild,
 } from '@/lib/data';
 import { convertPrice, formatPrice } from '@/lib/format';
@@ -101,6 +102,11 @@ export default function BuildEstimatorPanel() {
   >([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
 
+  // Swap state
+  const [swapTarget, setSwapTarget] = useState<string | null>(null);
+  const [swapAlts, setSwapAlts] = useState<Record<string, BuildComponent[]>>({});
+  const [loadingSwap, setLoadingSwap] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     if (currency === 'KRW') {
       setBudget(1500000);
@@ -136,6 +142,8 @@ export default function BuildEstimatorPanel() {
   async function handleEstimate() {
     setLoading(true);
     setEstimate(null);
+    setSwapTarget(null);
+    setSwapAlts({});
     const result = await fetchBuildEstimate(budget, currency);
     setEstimate(result);
     setLoading(false);
@@ -153,6 +161,38 @@ export default function BuildEstimatorPanel() {
     } else {
       toast.error('저장에 실패했습니다.');
     }
+  }
+
+  async function handleSwapOpen(cat: string, currentComp: BuildComponent | null) {
+    if (swapTarget === cat) {
+      setSwapTarget(null);
+      return;
+    }
+    setSwapTarget(cat);
+    if (swapAlts[cat]) return; // already cached
+
+    setLoadingSwap((prev) => ({ ...prev, [cat]: true }));
+    const allocation = estimate ? estimate.budget * ({ gpu: 0.40, cpu: 0.25, ram: 0.20, ssd: 0.15 }[cat] ?? 0.25) : 0;
+    const alts = await fetchBuildAlternatives(
+      cat,
+      allocation,
+      estimate?.currency ?? currency,
+      currentComp?.productId,
+    );
+    setSwapAlts((prev) => ({ ...prev, [cat]: alts }));
+    setLoadingSwap((prev) => ({ ...prev, [cat]: false }));
+  }
+
+  function selectAlternative(cat: string, alt: BuildComponent) {
+    if (!estimate) return;
+    const newComponents = estimate.components.map((c) =>
+      c?.category === cat ? { ...alt, budgetAllocation: c?.budgetAllocation } : c,
+    );
+    const newTotal = newComponents.reduce((sum, c) => sum + (c?.price ?? 0), 0);
+    setEstimate({ ...estimate, components: newComponents, totalPrice: newTotal });
+    setSwapTarget(null);
+    // Invalidate cache for this category so next open re-fetches with new excludeId
+    setSwapAlts((prev) => { const next = { ...prev }; delete next[cat]; return next; });
   }
 
   function handleTabChange(t: 'estimate' | 'saved') {
@@ -259,38 +299,84 @@ export default function BuildEstimatorPanel() {
                   return (
                     <div
                       key={cat}
-                      className={`rounded-lg border p-2.5 ${
+                      className={`rounded-lg border ${
                         comp ? 'bg-gray-800 border-gray-700' : 'bg-gray-800/40 border-gray-700/50 opacity-60'
-                      }`}
+                      } ${swapTarget === cat ? 'border-blue-500/70' : ''}`}
                     >
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="text-sm">{CATEGORY_ICONS[cat]}</span>
-                        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                          {comp?.categoryName ?? cat.toUpperCase()}
-                        </span>
-                        {comp && (
-                          <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full font-medium ${comp.inStock ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
-                            {comp.inStock ? '재고있음' : '품절'}
+                      <div className="p-2.5">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-sm">{CATEGORY_ICONS[cat]}</span>
+                          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                            {comp?.categoryName ?? cat.toUpperCase()}
                           </span>
+                          {comp && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${comp.inStock ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+                              {comp.inStock ? '재고있음' : '품절'}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => handleSwapOpen(cat, comp)}
+                            className={`ml-auto text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer ${
+                              swapTarget === cat
+                                ? 'border-blue-500 text-blue-400 bg-blue-500/10'
+                                : 'border-gray-600 text-gray-400 hover:border-gray-400 hover:text-white'
+                            }`}
+                          >
+                            {swapTarget === cat ? '닫기' : '🔄 교체'}
+                          </button>
+                        </div>
+                        {comp ? (
+                          <div className="flex items-center gap-2">
+                            {comp.imageUrl && (
+                              <div className="w-9 h-9 relative shrink-0 rounded overflow-hidden bg-gray-700">
+                                <Image src={comp.imageUrl} alt={comp.productName} fill className="object-contain" unoptimized />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-white font-medium leading-snug line-clamp-2">{comp.productName}</p>
+                              {comp.storeName && <p className="text-xs text-gray-500">{comp.storeName}</p>}
+                            </div>
+                            <p className="text-sm font-bold text-blue-400 shrink-0">
+                              {formatPrice(convertPrice(comp.price, comp.currency, currency, usdToKrw), currency)}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-500 italic">예산 내 제품 없음</p>
                         )}
                       </div>
-                      {comp ? (
-                        <div className="flex items-center gap-2">
-                          {comp.imageUrl && (
-                            <div className="w-9 h-9 relative shrink-0 rounded overflow-hidden bg-gray-700">
-                              <Image src={comp.imageUrl} alt={comp.productName} fill className="object-contain" unoptimized />
-                            </div>
+
+                      {/* 교체 대안 목록 */}
+                      {swapTarget === cat && (
+                        <div className="border-t border-gray-700 px-2.5 pb-2.5 pt-2 space-y-1.5">
+                          <p className="text-xs text-gray-400 font-medium mb-1.5">다른 제품 선택</p>
+                          {loadingSwap[cat] ? (
+                            <p className="text-xs text-gray-500 text-center py-2">불러오는 중...</p>
+                          ) : (swapAlts[cat]?.length ?? 0) === 0 ? (
+                            <p className="text-xs text-gray-500 text-center py-2">대안 제품이 없습니다</p>
+                          ) : (
+                            swapAlts[cat].map((alt) => (
+                              <div key={alt.productId} className="flex items-center gap-2 p-1.5 rounded-md hover:bg-gray-700/50 transition-colors">
+                                {alt.imageUrl && (
+                                  <div className="w-8 h-8 relative shrink-0 rounded overflow-hidden bg-gray-700">
+                                    <Image src={alt.imageUrl} alt={alt.productName} fill className="object-contain" unoptimized />
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-white leading-snug line-clamp-2">{alt.productName}</p>
+                                  <p className="text-xs text-blue-400 font-bold">
+                                    {formatPrice(convertPrice(alt.price, alt.currency, currency, usdToKrw), currency)}
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => selectAlternative(cat, alt)}
+                                  className="shrink-0 text-xs px-2 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white font-medium cursor-pointer transition-colors"
+                                >
+                                  선택
+                                </button>
+                              </div>
+                            ))
                           )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs text-white font-medium leading-snug line-clamp-2">{comp.productName}</p>
-                            {comp.storeName && <p className="text-xs text-gray-500">{comp.storeName}</p>}
-                          </div>
-                          <p className="text-sm font-bold text-blue-400 shrink-0">
-                            {formatPrice(convertPrice(comp.price, comp.currency, currency, usdToKrw), currency)}
-                          </p>
                         </div>
-                      ) : (
-                        <p className="text-xs text-gray-500 italic">예산 내 제품 없음</p>
                       )}
                     </div>
                   );

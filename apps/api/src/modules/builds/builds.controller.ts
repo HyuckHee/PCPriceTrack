@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseFloatPipe, Post, Query } from '@nestjs/common';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { SafeUser } from '../../database/schema/users';
@@ -21,6 +21,25 @@ export class BuildsController {
   @Post()
   save(@Body() dto: SaveBuildDto, @CurrentUser() user: SafeUser) {
     return this.buildsService.save(dto, user.id);
+  }
+
+  /** GET /api/builds/alternatives?category=gpu&budget=400&currency=USD&excludeId=xxx */
+  @Public()
+  @Get('alternatives')
+  alternatives(
+    @Query('category') category: string,
+    @Query('budget', ParseFloatPipe) budget: number,
+    @Query('currency') currency: string,
+    @Query('excludeId') excludeId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.buildsService.alternatives(
+      category,
+      budget,
+      currency ?? 'USD',
+      excludeId,
+      limit ? parseInt(limit, 10) : 5,
+    );
   }
 
   /** GET /api/builds — 로그인한 유저의 견적만 조회 */
