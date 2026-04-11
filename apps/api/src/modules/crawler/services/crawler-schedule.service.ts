@@ -19,7 +19,7 @@ const DEFAULTS: Record<string, { label: string; cron: string; description: strin
   'schedule.high_volatility': {
     label: 'GPU / CPU',
     cron: '0 0 */3 * * *',
-    description: '고변동 카테고리 (GPU/CPU) 크롤링 주기',
+    description: '고변동 카테고리 (GPU/CPU/메인보드/파워/쿨러/케이스) 크롤링 주기',
   },
   'schedule.medium_volatility': {
     label: 'RAM / SSD',

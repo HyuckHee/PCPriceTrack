@@ -31,7 +31,16 @@ export const CRAWL_JOB_OPTIONS = {
 } as const;
 
 // Categories supported for discovery
-export const DISCOVERY_CATEGORIES = ['gpu', 'cpu', 'ram', 'ssd'] as const;
+export const DISCOVERY_CATEGORIES = [
+  'gpu',
+  'cpu',
+  'ram',
+  'ssd',
+  'motherboard',
+  'psu',
+  'cooler',
+  'case',
+] as const;
 export type DiscoveryCategory = (typeof DISCOVERY_CATEGORIES)[number];
 
 // Maximum consecutive failures before a listing is deactivated
