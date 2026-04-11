@@ -21,14 +21,68 @@ interface Product {
   category: { id: string; name: string };
 }
 
+/** 견적 짜기 카테고리 슬롯과 매핑되는 카테고리 이름 */
+const CATEGORY_NAME_TO_SLUG: Record<string, string> = {
+  '그래픽카드': 'gpu',
+  'CPU': 'cpu',
+  '메모리': 'ram',
+  'SSD': 'ssd',
+};
+
+export interface DragProductPayload {
+  productId: string;
+  productName: string;
+  categorySlug: string;
+  price: number;
+  currency: string;
+  imageUrl: string | null;
+  brand: string;
+  slug: string;
+  storeNames: string | null;
+}
+
+export const DRAG_TYPE = 'application/pcpt-product';
+
 export function ProductCard({ p }: { p: Product }) {
   const { displayCurrency, usdToKrw } = useCurrency();
+
+  const categorySlug = CATEGORY_NAME_TO_SLUG[p.category.name] ?? null;
+  const isDraggable = categorySlug !== null;
+
+  function handleDragStart(e: React.DragEvent<HTMLAnchorElement>) {
+    if (!categorySlug) return;
+    const price = p.minPrice ? parseFloat(p.minPrice) : 0;
+    const payload: DragProductPayload = {
+      productId: p.id,
+      productName: p.name,
+      categorySlug,
+      price,
+      currency: p.currency ?? 'KRW',
+      imageUrl: p.imageUrl,
+      brand: p.brand,
+      slug: p.slug,
+      storeNames: p.storeNames,
+    };
+    e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(payload));
+    e.dataTransfer.effectAllowed = 'copy';
+  }
 
   return (
     <Link
       href={`/products/${p.slug}`}
-      className="bg-gray-800 border border-gray-700 rounded-xl p-4 hover:border-gray-500 transition-colors flex flex-col"
+      draggable={isDraggable}
+      onDragStart={isDraggable ? handleDragStart : undefined}
+      className={`bg-gray-800 border border-gray-700 rounded-xl p-4 hover:border-gray-500 transition-colors flex flex-col relative group ${
+        isDraggable ? 'cursor-grab active:cursor-grabbing' : ''
+      }`}
     >
+      {/* 드래그 힌트 뱃지 — 견적 대상 카테고리만 */}
+      {isDraggable && (
+        <div className="absolute top-2 right-2 text-[10px] text-gray-400 bg-gray-700 rounded px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity select-none pointer-events-none z-10">
+          ✥ 드래그
+        </div>
+      )}
+
       {p.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -65,7 +119,7 @@ export function ProductCard({ p }: { p: Product }) {
           const maxConverted = maxRaw ? convertPrice(maxRaw, origCurrency, displayCurrency, usdToKrw) : null;
           const prev = prevRaw ? convertPrice(prevRaw, origCurrency, displayCurrency, usdToKrw) : null;
 
-          const showRange = maxConverted && maxConverted > minConverted * 1.01; // 1% 이상 차이날 때만 범위 표시
+          const showRange = maxConverted && maxConverted > minConverted * 1.01;
           const drop = prev && prev > minConverted ? Math.round(((prev - minConverted) / prev) * 100) : null;
 
           return (

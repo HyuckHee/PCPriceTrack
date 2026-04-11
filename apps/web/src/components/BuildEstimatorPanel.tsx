@@ -17,6 +17,7 @@ import { convertPrice, formatPrice } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { DRAG_TYPE, type DragProductPayload } from '@/components/ProductCard';
 
 const CATEGORY_ORDER = ['gpu', 'cpu', 'ram', 'ssd'];
 const CATEGORY_ICONS: Record<string, string> = {
@@ -89,6 +90,20 @@ export default function BuildEstimatorPanel() {
     };
   }, []);
 
+  // 전역 드래그 감지 — 상품 카드 드래그 시작/종료
+  useEffect(() => {
+    const onStart = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes(DRAG_TYPE)) setIsDragging(true);
+    };
+    const onEnd = () => { setIsDragging(false); setDropTarget(null); };
+    document.addEventListener('dragstart', onStart);
+    document.addEventListener('dragend', onEnd);
+    return () => {
+      document.removeEventListener('dragstart', onStart);
+      document.removeEventListener('dragend', onEnd);
+    };
+  }, []);
+
   // Form state
   const [budget, setBudget] = useState<number>(1000);
   const [inputValue, setInputValue] = useState<string>('1000');
@@ -106,6 +121,11 @@ export default function BuildEstimatorPanel() {
   const [swapTarget, setSwapTarget] = useState<string | null>(null);
   const [swapAlts, setSwapAlts] = useState<Record<string, BuildComponent[]>>({});
   const [loadingSwap, setLoadingSwap] = useState<Record<string, boolean>>({});
+
+  // Drag & drop state
+  const [isDragging, setIsDragging] = useState(false);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [flashCat, setFlashCat] = useState<string | null>(null);
 
   useEffect(() => {
     if (currency === 'KRW') {
@@ -193,6 +213,66 @@ export default function BuildEstimatorPanel() {
     setSwapTarget(null);
     // Invalidate cache for this category so next open re-fetches with new excludeId
     setSwapAlts((prev) => { const next = { ...prev }; delete next[cat]; return next; });
+  }
+
+  function handleDragOver(e: React.DragEvent, cat: string) {
+    if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setDropTarget(cat);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+      setDropTarget(null);
+    }
+  }
+
+  function handleDrop(e: React.DragEvent, cat: string) {
+    e.preventDefault();
+    setDropTarget(null);
+    setIsDragging(false);
+    const raw = e.dataTransfer.getData(DRAG_TYPE);
+    if (!raw) return;
+    try {
+      const payload = JSON.parse(raw) as DragProductPayload;
+      if (payload.categorySlug !== cat) {
+        toast.error(`이 슬롯은 ${CATEGORY_ICONS[cat]} ${cat.toUpperCase()} 전용입니다.`);
+        return;
+      }
+      if (!estimate) {
+        toast.error('먼저 견적을 계산한 후 교체해주세요.');
+        return;
+      }
+      const catLabel: Record<string, string> = { gpu: '그래픽카드', cpu: 'CPU', ram: '메모리', ssd: 'SSD' };
+      const newComp: BuildComponent = {
+        category: cat,
+        categoryName: catLabel[cat] ?? cat,
+        productId: payload.productId,
+        productName: payload.productName,
+        slug: payload.slug,
+        brand: payload.brand,
+        imageUrl: payload.imageUrl,
+        price: payload.price,
+        currency: payload.currency,
+        storeUrl: null,
+        storeName: payload.storeNames?.split(', ')[0] ?? null,
+        inStock: true,
+      };
+      const newComponents = estimate.components.map((c) =>
+        c?.category === cat ? { ...newComp, budgetAllocation: c?.budgetAllocation } : c,
+      );
+      if (!newComponents.find((c) => c?.category === cat)) newComponents.push(newComp);
+      const newTotal = newComponents.reduce((s, c) => s + (c?.price ?? 0), 0);
+      setEstimate({ ...estimate, components: newComponents, totalPrice: newTotal });
+      // Invalidate swap cache for this category
+      setSwapAlts((prev) => { const next = { ...prev }; delete next[cat]; return next; });
+      setFlashCat(cat);
+      setTimeout(() => setFlashCat(null), 800);
+      toast.success(`${catLabel[cat] ?? cat} 교체됨!`);
+    } catch {
+      // ignore
+    }
   }
 
   function handleTabChange(t: 'estimate' | 'saved') {
@@ -291,6 +371,13 @@ export default function BuildEstimatorPanel() {
               {loading ? '계산 중...' : '견적 계산하기'}
             </Button>
 
+            {/* 드래그 힌트 배너 */}
+            {isDragging && (
+              <div className="rounded-lg bg-blue-900/30 border border-blue-500/50 px-3 py-2 text-xs text-blue-300 text-center animate-pulse">
+                📦 원하는 슬롯에 드래그해서 놓으세요
+              </div>
+            )}
+
             {/* Results */}
             {estimate && (
               <div className="space-y-2">
@@ -299,9 +386,18 @@ export default function BuildEstimatorPanel() {
                   return (
                     <div
                       key={cat}
-                      className={`rounded-lg border ${
-                        comp ? 'bg-gray-800 border-gray-700' : 'bg-gray-800/40 border-gray-700/50 opacity-60'
-                      } ${swapTarget === cat ? 'border-blue-500/70' : ''}`}
+                      onDragOver={(e) => handleDragOver(e, cat)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, cat)}
+                      className={`rounded-lg border transition-all duration-300 ${
+                        flashCat === cat
+                          ? 'bg-green-900/30 border-green-500 ring-2 ring-green-500/60 scale-[1.02]'
+                          : dropTarget === cat
+                          ? 'bg-blue-900/20 border-blue-500/60 ring-1 ring-blue-500/40'
+                          : comp
+                          ? 'bg-gray-800 border-gray-700'
+                          : 'bg-gray-800/40 border-gray-700/50 opacity-60'
+                      } ${swapTarget === cat && flashCat !== cat && dropTarget !== cat ? 'border-blue-500/70' : ''}`}
                     >
                       <div className="p-2.5">
                         <div className="flex items-center gap-1.5 mb-1">
@@ -309,21 +405,27 @@ export default function BuildEstimatorPanel() {
                           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                             {comp?.categoryName ?? cat.toUpperCase()}
                           </span>
-                          {comp && (
+                          {comp && !isDragging && (
                             <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${comp.inStock ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
                               {comp.inStock ? '재고있음' : '품절'}
                             </span>
                           )}
-                          <button
-                            onClick={() => handleSwapOpen(cat, comp)}
-                            className={`ml-auto text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer ${
-                              swapTarget === cat
-                                ? 'border-blue-500 text-blue-400 bg-blue-500/10'
-                                : 'border-gray-600 text-gray-400 hover:border-gray-400 hover:text-white'
-                            }`}
-                          >
-                            {swapTarget === cat ? '닫기' : '🔄 교체'}
-                          </button>
+                          {dropTarget === cat ? (
+                            <span className="ml-auto text-xs text-blue-400 font-medium animate-pulse">← 놓기</span>
+                          ) : isDragging ? (
+                            <span className="ml-auto text-xs text-gray-500">↑ 여기에 드롭</span>
+                          ) : (
+                            <button
+                              onClick={() => handleSwapOpen(cat, comp)}
+                              className={`ml-auto text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer ${
+                                swapTarget === cat
+                                  ? 'border-blue-500 text-blue-400 bg-blue-500/10'
+                                  : 'border-gray-600 text-gray-400 hover:border-gray-400 hover:text-white'
+                              }`}
+                            >
+                              {swapTarget === cat ? '닫기' : '🔄 교체'}
+                            </button>
+                          )}
                         </div>
                         {comp ? (
                           <div className="flex items-center gap-2">
@@ -341,7 +443,9 @@ export default function BuildEstimatorPanel() {
                             </p>
                           </div>
                         ) : (
-                          <p className="text-xs text-gray-500 italic">예산 내 제품 없음</p>
+                          <p className="text-xs text-gray-500 italic">
+                            {isDragging ? '여기에 드래그해서 추가' : '예산 내 제품 없음'}
+                          </p>
                         )}
                       </div>
 

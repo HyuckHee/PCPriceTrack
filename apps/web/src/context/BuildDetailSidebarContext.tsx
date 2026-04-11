@@ -16,8 +16,11 @@ export interface BuildDetail {
 interface BuildDetailSidebarContextValue {
   isOpen: boolean;
   selectedBuild: BuildDetail | null;
+  isModified: boolean;
   openSidebar: (build: BuildDetail) => void;
   closeSidebar: () => void;
+  updateComponent: (categorySlug: string, comp: BuildComponent) => void;
+  resetModified: () => void;
 }
 
 const BuildDetailSidebarContext = createContext<BuildDetailSidebarContextValue | null>(null);
@@ -25,19 +28,36 @@ const BuildDetailSidebarContext = createContext<BuildDetailSidebarContextValue |
 export function BuildDetailSidebarProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedBuild, setSelectedBuild] = useState<BuildDetail | null>(null);
+  const [isModified, setIsModified] = useState(false);
 
   const openSidebar = useCallback((build: BuildDetail) => {
     setSelectedBuild(build);
+    setIsModified(false);
     setIsOpen(true);
   }, []);
 
   const closeSidebar = useCallback(() => {
     setIsOpen(false);
-    setTimeout(() => setSelectedBuild(null), 300); // 애니메이션 후 초기화
+    setTimeout(() => { setSelectedBuild(null); setIsModified(false); }, 300);
   }, []);
 
+  const updateComponent = useCallback((categorySlug: string, comp: BuildComponent) => {
+    setSelectedBuild((prev) => {
+      if (!prev) return prev;
+      const components = prev.components.map((c) =>
+        c.category === categorySlug ? comp : c,
+      );
+      if (!components.find((c) => c.category === categorySlug)) components.push(comp);
+      const newTotal = components.reduce((s, c) => s + c.price, 0);
+      return { ...prev, components, totalPrice: String(newTotal) };
+    });
+    setIsModified(true);
+  }, []);
+
+  const resetModified = useCallback(() => setIsModified(false), []);
+
   return (
-    <BuildDetailSidebarContext.Provider value={{ isOpen, selectedBuild, openSidebar, closeSidebar }}>
+    <BuildDetailSidebarContext.Provider value={{ isOpen, selectedBuild, isModified, openSidebar, closeSidebar, updateComponent, resetModified }}>
       {children}
     </BuildDetailSidebarContext.Provider>
   );

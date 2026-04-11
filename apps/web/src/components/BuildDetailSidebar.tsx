@@ -1,10 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
 import { toast } from 'sonner';
 import { useBuildDetailSidebar } from '@/context/BuildDetailSidebarContext';
 import { useCurrency } from '@/context/CurrencyContext';
 import { formatPrice, convertPrice } from '@/lib/format';
+import { BuildComponent, saveBuild } from '@/lib/data';
+import { DRAG_TYPE, type DragProductPayload } from '@/components/ProductCard';
 
 const CATEGORY_ICONS: Record<string, string> = {
   gpu: '🎮',
@@ -23,8 +26,12 @@ const CATEGORY_LABELS: Record<string, string> = {
 const CATEGORY_ORDER = ['gpu', 'cpu', 'ram', 'ssd'];
 
 export default function BuildDetailSidebar() {
-  const { isOpen, selectedBuild, closeSidebar } = useBuildDetailSidebar();
+  const { isOpen, selectedBuild, isModified, closeSidebar, updateComponent, resetModified } = useBuildDetailSidebar();
   const { displayCurrency: currency, usdToKrw } = useCurrency();
+
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [flashCat, setFlashCat] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   async function handleDelete() {
     if (!selectedBuild) return;
@@ -44,10 +51,75 @@ export default function BuildDetailSidebar() {
     }
   }
 
+  async function handleSaveChanges() {
+    if (!selectedBuild) return;
+    setSaving(true);
+    const result = await saveBuild(
+      selectedBuild.name,
+      Number(selectedBuild.budget),
+      selectedBuild.currency,
+      Number(selectedBuild.totalPrice ?? 0),
+      selectedBuild.components,
+    );
+    setSaving(false);
+    if (result) {
+      toast.success('변경 내용을 새 견적으로 저장했습니다!');
+      resetModified();
+    } else {
+      toast.error('저장에 실패했습니다. 로그인이 필요할 수 있습니다.');
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent, cat: string) {
+    if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setDropTarget(cat);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+      setDropTarget(null);
+    }
+  }
+
+  function handleDrop(e: React.DragEvent, cat: string) {
+    e.preventDefault();
+    setDropTarget(null);
+    const raw = e.dataTransfer.getData(DRAG_TYPE);
+    if (!raw) return;
+    try {
+      const payload = JSON.parse(raw) as DragProductPayload;
+      if (payload.categorySlug !== cat) {
+        toast.error(`이 슬롯은 ${CATEGORY_LABELS[cat] ?? cat} 전용입니다.`);
+        return;
+      }
+      const newComp: BuildComponent = {
+        category: cat,
+        categoryName: CATEGORY_LABELS[cat] ?? cat,
+        productId: payload.productId,
+        productName: payload.productName,
+        slug: payload.slug,
+        brand: payload.brand,
+        imageUrl: payload.imageUrl,
+        price: payload.price,
+        currency: payload.currency,
+        storeUrl: null,
+        storeName: payload.storeNames?.split(', ')[0] ?? null,
+        inStock: true,
+      };
+      updateComponent(cat, newComp);
+      setFlashCat(cat);
+      setTimeout(() => setFlashCat(null), 800);
+      toast.success(`${CATEGORY_LABELS[cat] ?? cat} 교체됨!`);
+    } catch {
+      // ignore
+    }
+  }
+
   const orderedComponents = selectedBuild
     ? CATEGORY_ORDER
-        .map((cat) => selectedBuild.components.find((c) => c.category === cat))
-        .filter(Boolean)
+        .map((cat) => ({ cat, comp: selectedBuild.components.find((c) => c.category === cat) ?? null }))
     : [];
 
   const totalDisplay = selectedBuild?.totalPrice
@@ -76,9 +148,16 @@ export default function BuildDetailSidebar() {
         {/* 헤더 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700 shrink-0">
           <div>
-            <h2 className="text-white font-bold text-base truncate max-w-[220px]">
-              {selectedBuild?.name ?? '견적 상세'}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-white font-bold text-base truncate max-w-[200px]">
+                {selectedBuild?.name ?? '견적 상세'}
+              </h2>
+              {isModified && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 shrink-0">
+                  변경됨
+                </span>
+              )}
+            </div>
             {selectedBuild && (
               <p className="text-xs text-gray-500 mt-0.5">
                 {new Date(selectedBuild.createdAt).toLocaleDateString('ko-KR', {
@@ -94,6 +173,13 @@ export default function BuildDetailSidebar() {
           >
             ✕
           </button>
+        </div>
+
+        {/* 드래그 힌트 */}
+        <div className="px-4 pt-2 shrink-0">
+          <p className="text-[11px] text-gray-500 text-center">
+            📦 상품 목록에서 드래그해서 부품을 교체할 수 있습니다
+          </p>
         </div>
 
         {/* 예산 정보 */}
@@ -122,56 +208,72 @@ export default function BuildDetailSidebar() {
           {orderedComponents.length === 0 ? (
             <p className="text-center text-gray-500 text-sm py-10">부품 정보가 없습니다.</p>
           ) : (
-            orderedComponents.map((comp) => {
-              if (!comp) return null;
-              const displayPrice = formatPrice(
-                convertPrice(comp.price, comp.currency, currency, usdToKrw),
-                currency,
-              );
-              return (
-                <div
-                  key={comp.productId}
-                  className="bg-gray-800 border border-gray-700 rounded-xl p-3 flex gap-3"
-                >
-                  {/* 이미지 */}
-                  <div className="w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-gray-700 flex items-center justify-center">
-                    {comp.imageUrl ? (
-                      <Image src={comp.imageUrl} alt={comp.productName} width={56} height={56} className="object-contain" unoptimized />
-                    ) : (
-                      <span className="text-2xl">{CATEGORY_ICONS[comp.category] ?? '📦'}</span>
-                    )}
-                  </div>
-
-                  {/* 정보 */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                        {CATEGORY_LABELS[comp.category] ?? comp.category}
-                      </span>
-                    </div>
-                    <p className="text-xs text-white font-medium leading-snug line-clamp-2">
-                      {comp.productName}
-                    </p>
-                    <div className="flex items-center justify-between mt-1.5">
-                      {comp.storeName && (
-                        <span className="text-[10px] text-gray-500">{comp.storeName}</span>
-                      )}
-                      <span className="text-sm font-bold text-blue-400 ml-auto">{displayPrice}</span>
-                    </div>
-                    {comp.storeUrl && (
-                      <a
-                        href={comp.storeUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block mt-1.5 text-[10px] text-blue-500 hover:text-blue-400 transition-colors"
-                      >
-                        쇼핑몰 바로가기 →
-                      </a>
-                    )}
-                  </div>
+            orderedComponents.map(({ cat, comp }) => (
+              <div
+                key={cat}
+                onDragOver={(e) => handleDragOver(e, cat)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, cat)}
+                className={`border rounded-xl p-3 flex gap-3 transition-all duration-300 ${
+                  flashCat === cat
+                    ? 'bg-green-900/30 border-green-500 ring-2 ring-green-500/60 scale-[1.02]'
+                    : dropTarget === cat
+                    ? 'bg-blue-900/20 border-blue-500/70 ring-1 ring-blue-500/50'
+                    : comp
+                    ? 'bg-gray-800 border-gray-700'
+                    : 'bg-gray-800/40 border-gray-700/40 border-dashed'
+                }`}
+              >
+                {/* 이미지 / 아이콘 */}
+                <div className="w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-gray-700 flex items-center justify-center">
+                  {comp?.imageUrl ? (
+                    <Image src={comp.imageUrl} alt={comp.productName} width={56} height={56} className="object-contain" unoptimized />
+                  ) : (
+                    <span className="text-2xl">{CATEGORY_ICONS[cat] ?? '📦'}</span>
+                  )}
                 </div>
-              );
-            })
+
+                {/* 정보 */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                      {CATEGORY_LABELS[cat] ?? cat}
+                    </span>
+                    {dropTarget === cat && (
+                      <span className="text-[10px] text-blue-400">← 놓기</span>
+                    )}
+                  </div>
+                  {comp ? (
+                    <>
+                      <p className="text-xs text-white font-medium leading-snug line-clamp-2">
+                        {comp.productName}
+                      </p>
+                      <div className="flex items-center justify-between mt-1.5">
+                        {comp.storeName && (
+                          <span className="text-[10px] text-gray-500">{comp.storeName}</span>
+                        )}
+                        <span className="text-sm font-bold text-blue-400 ml-auto">
+                          {formatPrice(convertPrice(comp.price, comp.currency, currency, usdToKrw), currency)}
+                        </span>
+                      </div>
+                      {comp.storeUrl && (
+                        <a
+                          href={comp.storeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block mt-1.5 text-[10px] text-blue-500 hover:text-blue-400 transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          쇼핑몰 바로가기 →
+                        </a>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-500 italic mt-1">여기에 드래그해서 추가</p>
+                  )}
+                </div>
+              </div>
+            ))
           )}
         </div>
 
@@ -182,6 +284,15 @@ export default function BuildDetailSidebar() {
               <span className="text-xs text-gray-300 font-medium">총 견적 금액</span>
               <span className="text-base font-bold text-blue-300">{totalDisplay}</span>
             </div>
+          )}
+          {isModified && (
+            <button
+              onClick={handleSaveChanges}
+              disabled={saving}
+              className="w-full py-2 rounded-lg bg-green-700 hover:bg-green-600 text-white text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {saving ? '저장 중...' : '💾 변경 내용 새 견적으로 저장'}
+            </button>
           )}
           <button
             onClick={handleDelete}
