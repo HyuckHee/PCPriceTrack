@@ -97,7 +97,12 @@ export default function BuildEstimatorPanel() {
       const types = e.dataTransfer?.types;
       if (types && Array.from(types).includes(DRAG_TYPE)) setIsDragging(true);
     };
-    const onEnd = () => { setIsDragging(false); setDropTarget(null); };
+    const onEnd = () => {
+      setIsDragging(false);
+      setDropTarget(null);
+      setIsDragOverPanel(false);
+      panelDragCount.current = 0;
+    };
     document.addEventListener('dragstart', onStart);
     document.addEventListener('dragend', onEnd);
     return () => {
@@ -126,6 +131,8 @@ export default function BuildEstimatorPanel() {
 
   // Drag & drop state
   const [isDragging, setIsDragging] = useState(false);
+  const [isDragOverPanel, setIsDragOverPanel] = useState(false);
+  const panelDragCount = useRef(0);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [flashCat, setFlashCat] = useState<string | null>(null);
 
@@ -217,6 +224,16 @@ export default function BuildEstimatorPanel() {
     setSwapAlts((prev) => { const next = { ...prev }; delete next[cat]; return next; });
   }
 
+  function handlePanelDragEnter() {
+    panelDragCount.current++;
+    setIsDragOverPanel(true);
+  }
+
+  function handlePanelDragLeave() {
+    panelDragCount.current = Math.max(0, panelDragCount.current - 1);
+    if (panelDragCount.current === 0) setIsDragOverPanel(false);
+  }
+
   function handleDragOver(e: React.DragEvent, cat: string) {
     // types 체크를 하지 않고 항상 preventDefault — 이것이 없으면 drop 이벤트가 발생하지 않음
     e.preventDefault();
@@ -291,16 +308,37 @@ export default function BuildEstimatorPanel() {
       ? formatPrice(convertPrice(estimate.totalPrice, estimate.currency, currency, usdToKrw), currency)
       : null;
 
+  const showDragOverlay = isDragging && isDragOverPanel && isOpen;
+
   return (
+    <>
+    {/* 드래그 오버 시 페이지 배경 블러 */}
+    <div
+      className={`fixed inset-0 z-[49] bg-black/30 backdrop-blur-sm pointer-events-none transition-opacity duration-200 ${
+        showDragOverlay ? 'opacity-100' : 'opacity-0'
+      }`}
+    />
+
     <div
       style={{ left: pos.x, top: pos.y, width: PANEL_W, maxHeight: PANEL_H }}
-      className={`fixed z-50 flex flex-col bg-gray-900 border border-gray-700 rounded-xl shadow-2xl transition-opacity duration-200 select-none ${
+      onDragEnter={handlePanelDragEnter}
+      onDragLeave={handlePanelDragLeave}
+      onDragOver={(e) => e.preventDefault()}
+      className={`fixed z-50 flex flex-col bg-gray-900 border border-gray-700 rounded-xl shadow-2xl transition-opacity duration-200 select-none relative overflow-hidden ${
         isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
       }`}
       aria-modal="true"
       role="dialog"
       aria-label="조립 PC 견적 계산기"
     >
+      {/* 드래그 오버 오버레이 */}
+      {showDragOverlay && (
+        <div className="absolute inset-0 z-20 rounded-xl flex flex-col items-center justify-center bg-blue-950/85 backdrop-blur-[2px] pointer-events-none transition-opacity duration-150">
+          <span className="text-5xl mb-3">📦</span>
+          <span className="text-white font-bold text-xl tracking-wide">부품 변경하기</span>
+          <span className="text-blue-300 text-xs mt-2 opacity-80">원하는 슬롯에 놓으세요</span>
+        </div>
+      )}
       {/* Draggable header */}
       <div
         onMouseDown={onHeaderMouseDown}
@@ -563,5 +601,6 @@ export default function BuildEstimatorPanel() {
         </Tabs>
       </div>
     </div>
+    </>
   );
 }
