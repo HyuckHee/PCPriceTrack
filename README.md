@@ -690,3 +690,10 @@ pnpm --filter api exec playwright install chromium
 rm -rf apps/web/.next
 pnpm --filter web dev
 ```
+
+### 수동 상품 그룹화
+```bash
+curl -X POST /api/products/admin/merge-group \
+  -H "x-admin-key: YOUR_KEY" \
+  -d '{"productIds": ["uuid-A", "uuid-B"], "groupName": "RTX 4070 Super"}'
+```
