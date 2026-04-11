@@ -7,7 +7,7 @@ import { useBuildDetailSidebar } from '@/context/BuildDetailSidebarContext';
 import { useCurrency } from '@/context/CurrencyContext';
 import { formatPrice, convertPrice } from '@/lib/format';
 import { BuildComponent, saveBuild } from '@/lib/data';
-import { DRAG_TYPE, type DragProductPayload } from '@/components/ProductCard';
+import { DRAG_TYPE, type DragProductPayload } from '@/lib/drag-utils';
 
 const CATEGORY_ICONS: Record<string, string> = {
   gpu: '🎮',

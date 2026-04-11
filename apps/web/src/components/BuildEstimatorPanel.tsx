@@ -17,7 +17,7 @@ import { convertPrice, formatPrice } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { DRAG_TYPE, type DragProductPayload } from '@/components/ProductCard';
+import { DRAG_TYPE, type DragProductPayload } from '@/lib/drag-utils';
 
 const CATEGORY_ORDER = ['gpu', 'cpu', 'ram', 'ssd'];
 const CATEGORY_ICONS: Record<string, string> = {
