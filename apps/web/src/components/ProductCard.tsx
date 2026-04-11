@@ -88,6 +88,7 @@ export function ProductCard({ p }: { p: Product }) {
         <img
           src={p.imageUrl}
           alt={p.name}
+          draggable={false}
           className="w-full h-32 object-contain mb-3 rounded"
         />
       ) : (
