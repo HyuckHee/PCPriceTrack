@@ -251,9 +251,27 @@ export default function BuildDetailSidebar() {
                         {comp.storeName && (
                           <span className="text-[10px] text-gray-500">{comp.storeName}</span>
                         )}
-                        <span className="text-sm font-bold text-blue-400 ml-auto">
-                          {formatPrice(convertPrice(comp.price, comp.currency, currency, usdToKrw), currency)}
-                        </span>
+                        <div className="ml-auto text-right">
+                          {comp.originalPrice && comp.originalPrice > comp.price ? (
+                            <>
+                              <div className="text-[10px] text-gray-500 line-through">
+                                {formatPrice(convertPrice(comp.originalPrice, comp.currency, currency, usdToKrw), currency)}
+                              </div>
+                              <div className="flex items-center gap-1 justify-end">
+                                <span className="text-xs font-bold text-red-400">
+                                  -{Math.round((1 - comp.price / comp.originalPrice) * 100)}%
+                                </span>
+                                <span className="text-sm font-bold text-blue-400">
+                                  {formatPrice(convertPrice(comp.price, comp.currency, currency, usdToKrw), currency)}
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-sm font-bold text-blue-400">
+                              {formatPrice(convertPrice(comp.price, comp.currency, currency, usdToKrw), currency)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {comp.storeUrl && (
                         <a

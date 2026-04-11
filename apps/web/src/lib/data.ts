@@ -181,6 +181,7 @@ export interface BuildComponent {
   brand: string;
   imageUrl: string | null;
   price: number;
+  originalPrice?: number | null;
   currency: string;
   storeUrl: string | null;
   storeName: string | null;

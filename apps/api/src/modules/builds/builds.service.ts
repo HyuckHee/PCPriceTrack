@@ -40,9 +40,10 @@ export class BuildsService {
           WITH latest_price AS (
             SELECT DISTINCT ON (pr.listing_id)
               pl.product_id,
-              pl.url         AS store_url,
-              s.name         AS store_name,
-              pr.price::numeric  AS price,
+              pl.url                      AS store_url,
+              s.name                      AS store_name,
+              pr.price::numeric           AS price,
+              pr.original_price::numeric  AS original_price,
               pr.currency,
               pr.in_stock,
               pr.recorded_at
@@ -65,6 +66,7 @@ export class BuildsService {
               store_url,
               store_name,
               price,
+              original_price,
               currency,
               in_stock
             FROM latest_price
@@ -80,6 +82,7 @@ export class BuildsService {
             b.store_url     AS "storeUrl",
             b.store_name    AS "storeName",
             b.price,
+            b.original_price AS "originalPrice",
             b.currency,
             b.in_stock      AS "inStock"
           FROM best_per_product b
@@ -91,6 +94,8 @@ export class BuildsService {
         const row = rows.rows[0] as Record<string, unknown> | undefined;
         if (!row) return null;
 
+        const price = Number(row.price);
+        const origPrice = row.originalPrice ? Number(row.originalPrice) : null;
         return {
           category: categorySlug,
           categoryName: CATEGORY_LABELS[categorySlug],
@@ -99,7 +104,8 @@ export class BuildsService {
           slug: String(row.slug),
           brand: String(row.brand),
           imageUrl: row.imageUrl ? String(row.imageUrl) : null,
-          price: Number(row.price),
+          price,
+          originalPrice: origPrice && origPrice > price ? origPrice : null,
           currency: String(row.currency),
           storeUrl: row.storeUrl ? String(row.storeUrl) : null,
           storeName: row.storeName ? String(row.storeName) : null,
@@ -135,9 +141,10 @@ export class BuildsService {
       WITH latest_price AS (
         SELECT DISTINCT ON (pr.listing_id)
           pl.product_id,
-          pl.url         AS store_url,
-          s.name         AS store_name,
-          pr.price::numeric  AS price,
+          pl.url                      AS store_url,
+          s.name                      AS store_name,
+          pr.price::numeric           AS price,
+          pr.original_price::numeric  AS original_price,
           pr.currency,
           pr.in_stock,
           pr.recorded_at
@@ -160,6 +167,7 @@ export class BuildsService {
           store_url,
           store_name,
           price,
+          original_price,
           currency,
           in_stock
         FROM latest_price
@@ -175,6 +183,7 @@ export class BuildsService {
         b.store_url     AS "storeUrl",
         b.store_name    AS "storeName",
         b.price,
+        b.original_price AS "originalPrice",
         b.currency,
         b.in_stock      AS "inStock"
       FROM best_per_product b
@@ -193,6 +202,8 @@ export class BuildsService {
       brand: String(row.brand),
       imageUrl: row.imageUrl ? String(row.imageUrl) : null,
       price: Number(row.price),
+      originalPrice: row.originalPrice && Number(row.originalPrice) > Number(row.price)
+        ? Number(row.originalPrice) : null,
       currency: String(row.currency),
       storeUrl: row.storeUrl ? String(row.storeUrl) : null,
       storeName: row.storeName ? String(row.storeName) : null,

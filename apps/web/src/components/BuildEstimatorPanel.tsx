@@ -476,9 +476,29 @@ export default function BuildEstimatorPanel() {
                               <p className="text-xs text-white font-medium leading-snug line-clamp-2">{comp.productName}</p>
                               {comp.storeName && <p className="text-xs text-gray-500">{comp.storeName}</p>}
                             </div>
-                            <p className="text-sm font-bold text-blue-400 shrink-0">
-                              {formatPrice(convertPrice(comp.price, comp.currency, currency, usdToKrw), currency)}
-                            </p>
+                            <div className="shrink-0 text-right">
+                              {comp.originalPrice && comp.originalPrice > comp.price && (() => {
+                                const drop = Math.round((1 - comp.price / comp.originalPrice) * 100);
+                                return drop >= 1 ? (
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span className="text-[10px] text-gray-500 line-through">
+                                      {formatPrice(convertPrice(comp.originalPrice, comp.currency, currency, usdToKrw), currency)}
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] font-bold text-red-400">-{drop}%</span>
+                                      <span className="text-sm font-bold text-blue-400">
+                                        {formatPrice(convertPrice(comp.price, comp.currency, currency, usdToKrw), currency)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ) : null;
+                              })()}
+                              {(!comp.originalPrice || comp.originalPrice <= comp.price) && (
+                                <p className="text-sm font-bold text-blue-400">
+                                  {formatPrice(convertPrice(comp.price, comp.currency, currency, usdToKrw), currency)}
+                                </p>
+                              )}
+                            </div>
                           </div>
                         ) : (
                           <p className="text-xs text-gray-500 italic">
@@ -581,7 +601,18 @@ export default function BuildEstimatorPanel() {
                     {build.components.map((c) => (
                       <div key={c.productId} className="flex justify-between text-xs">
                         <span className="text-gray-400 truncate">{CATEGORY_ICONS[c.category]} {c.productName}</span>
-                        <span className="text-blue-400 font-medium shrink-0 ml-2">{formatPrice(Number(c.price), c.currency)}</span>
+                        <div className="shrink-0 ml-2 text-right">
+                          {c.originalPrice && c.originalPrice > c.price ? (
+                            <div className="flex items-center gap-1">
+                              <span className="text-red-400 font-bold">
+                                -{Math.round((1 - c.price / c.originalPrice) * 100)}%
+                              </span>
+                              <span className="text-blue-400 font-medium">{formatPrice(Number(c.price), c.currency)}</span>
+                            </div>
+                          ) : (
+                            <span className="text-blue-400 font-medium">{formatPrice(Number(c.price), c.currency)}</span>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
