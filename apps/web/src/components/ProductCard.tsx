@@ -49,7 +49,7 @@ export function ProductCard({ p }: { p: Product }) {
   const categorySlug = CATEGORY_NAME_TO_SLUG[p.category.name] ?? null;
   const isDraggable = categorySlug !== null;
 
-  function handleDragStart(e: React.DragEvent<HTMLAnchorElement>) {
+  function handleDragStart(e: React.DragEvent<HTMLElement>) {
     if (!categorySlug) return;
     const price = p.minPrice ? parseFloat(p.minPrice) : 0;
     const payload: DragProductPayload = {
@@ -68,13 +68,15 @@ export function ProductCard({ p }: { p: Product }) {
   }
 
   return (
-    <Link
-      href={`/products/${p.slug}`}
+    /* draggable은 Link(<a>)가 아닌 래퍼 div에 붙여야 클릭 이벤트가 막히지 않음 */
+    <div
       draggable={isDraggable}
       onDragStart={isDraggable ? handleDragStart : undefined}
-      className={`bg-gray-800 border border-gray-700 rounded-xl p-4 hover:border-gray-500 transition-colors flex flex-col relative group ${
-        isDraggable ? 'cursor-grab active:cursor-grabbing' : ''
-      }`}
+      className={`relative group ${isDraggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+    >
+    <Link
+      href={`/products/${p.slug}`}
+      className="bg-gray-800 border border-gray-700 rounded-xl p-4 hover:border-gray-500 transition-colors flex flex-col relative"
     >
       {/* 드래그 힌트 뱃지 — 견적 대상 카테고리만 */}
       {isDraggable && (
@@ -159,5 +161,6 @@ export function ProductCard({ p }: { p: Product }) {
           );
         })()}
     </Link>
+    </div>
   );
 }
