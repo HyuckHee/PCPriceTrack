@@ -180,6 +180,11 @@ export default function BuildEstimatorPanel() {
 
   async function handleSave() {
     if (!estimate) return;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      toast.error('견적 저장은 로그인 후 이용 가능합니다.');
+      return;
+    }
     setSaving(true);
     const validComponents = estimate.components.filter(Boolean) as BuildComponent[];
     const result = await saveBuild(buildName, estimate.budget, estimate.currency, estimate.totalPrice, validComponents);
