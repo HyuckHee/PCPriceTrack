@@ -65,6 +65,43 @@ export function ProductCard({ p }: { p: Product }) {
     };
     e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(payload));
     e.dataTransfer.effectAllowed = 'copy';
+
+    // 커스텀 드래그 이미지 — 부품 이미지 + 이름 미니 카드
+    const ghost = document.createElement('div');
+    ghost.style.cssText = [
+      'position:fixed', 'top:-9999px', 'left:-9999px',
+      'width:130px', 'padding:10px 8px 8px',
+      'background:#111827', 'border:1px solid #3b82f6',
+      'border-radius:12px', 'box-shadow:0 8px 30px rgba(0,0,0,0.7)',
+      'display:flex', 'flex-direction:column', 'align-items:center', 'gap:6px',
+      'font-family:sans-serif',
+    ].join(';');
+
+    if (p.imageUrl) {
+      const img = document.createElement('img');
+      img.src = p.imageUrl;
+      img.style.cssText = 'width:90px;height:68px;object-fit:contain;border-radius:6px;background:#1f2937';
+      ghost.appendChild(img);
+    } else {
+      const icon = document.createElement('div');
+      icon.style.cssText = 'width:90px;height:68px;display:flex;align-items:center;justify-content:center;font-size:32px;';
+      icon.textContent = { gpu:'🎮', cpu:'⚡', ram:'💾', ssd:'💿' }[categorySlug] ?? '📦';
+      ghost.appendChild(icon);
+    }
+
+    const nameEl = document.createElement('p');
+    nameEl.style.cssText = 'margin:0;font-size:10px;color:#e5e7eb;text-align:center;line-height:1.4;max-width:114px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;';
+    nameEl.textContent = p.name;
+    ghost.appendChild(nameEl);
+
+    const badge = document.createElement('span');
+    badge.style.cssText = 'font-size:9px;color:#93c5fd;background:#1e3a5f;padding:2px 6px;border-radius:999px;';
+    badge.textContent = '🔄 견적 교체';
+    ghost.appendChild(badge);
+
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, 65, 55);
+    setTimeout(() => document.body.removeChild(ghost), 0);
   }
 
   return (
