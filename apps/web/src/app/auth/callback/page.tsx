@@ -12,8 +12,10 @@ function AuthCallbackInner() {
 
   useEffect(() => {
     const token = params.get('token');
+    const refresh = params.get('refresh') ?? undefined;
+    const uid = params.get('uid') ?? undefined;
     if (token) {
-      login(token).then(() => {
+      login(token, refresh, uid).then(() => {
         toast.success('로그인되었습니다!');
         router.replace('/products');
       });

@@ -27,11 +27,11 @@ export default function LoginPage() {
     const name = form.get('name') as string;
 
     try {
-      const res = await api.post<{ tokens: { accessToken: string }; user: { id: string } }>(
+      const res = await api.post<{ tokens: { accessToken: string; refreshToken: string }; user: { id: string } }>(
         isRegister ? '/auth/register' : '/auth/login',
         isRegister ? { email, password, name } : { email, password },
       );
-      await login(res.tokens.accessToken);
+      await login(res.tokens.accessToken, res.tokens.refreshToken, res.user.id);
       toast.success(isRegister ? '회원가입이 완료되었습니다!' : '로그인되었습니다!');
       router.push('/products');
     } catch (err) {

@@ -226,11 +226,8 @@ export async function saveBuild(
   components: BuildComponent[],
 ): Promise<SavedBuild | null> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') ?? undefined : undefined;
-  try {
-    return await api.post<SavedBuild>('/builds', { name, budget, currency, totalPrice, components }, token);
-  } catch {
-    return null;
-  }
+  // 401(세션 만료)은 호출자가 처리할 수 있도록 rethrow
+  return await api.post<SavedBuild>('/builds', { name, budget, currency, totalPrice, components }, token);
 }
 
 export async function fetchBuildAlternatives(

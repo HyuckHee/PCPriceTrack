@@ -243,14 +243,24 @@ export default function BuildEstimatorPanel() {
       return;
     }
     setSaving(true);
-    const validComponents = estimate.components.filter(Boolean) as BuildComponent[];
-    const result = await saveBuild(buildName, estimate.budget, estimate.currency, estimate.totalPrice, validComponents);
-    setSaving(false);
-    if (result) {
-      toast.success('견적이 저장되었습니다!');
-      loadSavedBuilds();
-    } else {
-      toast.error('저장에 실패했습니다.');
+    try {
+      const validComponents = estimate.components.filter(Boolean) as BuildComponent[];
+      const result = await saveBuild(buildName, estimate.budget, estimate.currency, estimate.totalPrice, validComponents);
+      if (result) {
+        toast.success('견적이 저장되었습니다!');
+        loadSavedBuilds();
+      } else {
+        toast.error('저장에 실패했습니다.');
+      }
+    } catch (err) {
+      const status = (err as { status?: number })?.status;
+      if (status === 401) {
+        toast.error('세션이 만료되었습니다. 다시 로그인해주세요.');
+      } else {
+        toast.error('저장에 실패했습니다.');
+      }
+    } finally {
+      setSaving(false);
     }
   }
 

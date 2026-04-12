@@ -70,9 +70,11 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
   googleCallback(@Req() req: Request, @Res() res: Response) {
-    const { tokens } = req.user as { user: SafeUser; tokens: AuthTokens };
+    const { user, tokens } = req.user as { user: SafeUser; tokens: AuthTokens };
     const frontendUrl = this.config.get<string>('oauth.frontendUrl');
-    res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}`);
+    res.redirect(
+      `${frontendUrl}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}&uid=${user.id}`,
+    );
   }
 
   // ── Kakao OAuth ───────────────────────────────────────────────
@@ -85,9 +87,11 @@ export class AuthController {
   @Get('kakao/callback')
   @UseGuards(AuthGuard('kakao'))
   kakaoCallback(@Req() req: Request, @Res() res: Response) {
-    const { tokens } = req.user as { user: SafeUser; tokens: AuthTokens };
+    const { user, tokens } = req.user as { user: SafeUser; tokens: AuthTokens };
     const frontendUrl = this.config.get<string>('oauth.frontendUrl');
-    res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}`);
+    res.redirect(
+      `${frontendUrl}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}&uid=${user.id}`,
+    );
   }
 
   @Public()
