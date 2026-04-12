@@ -38,9 +38,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   psu: '파워',
   cooler: '쿨러',
 };
-const BUDGET_RATIO: Record<string, number> = {
+const DEFAULT_RATIO: Record<string, number> = {
   gpu: 0.35, cpu: 0.20, motherboard: 0.15, ram: 0.10, psu: 0.08, ssd: 0.08, cooler: 0.04,
 };
+// alias used inside component logic
+const BUDGET_RATIO = DEFAULT_RATIO;
+
+const RATIO_LS_KEY = 'build_ratios_v1';
 
 const USD_PRESETS = [500, 800, 1000, 1500, 2000];
 const KRW_PRESETS = [700000, 1000000, 1500000, 2000000, 3000000];
@@ -144,6 +148,38 @@ export default function BuildEstimatorPanel() {
   >([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
 
+  // 비율 설정
+  const [ratios, setRatios] = useState<Record<string, number>>(() => {
+    if (typeof window === 'undefined') return { ...DEFAULT_RATIO };
+    try {
+      const saved = localStorage.getItem(RATIO_LS_KEY);
+      if (saved) return JSON.parse(saved) as Record<string, number>;
+    } catch { /* ignore */ }
+    return { ...DEFAULT_RATIO };
+  });
+  const [showRatioEditor, setShowRatioEditor] = useState(false);
+
+  // ratios를 localStorage에 저장
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(RATIO_LS_KEY, JSON.stringify(ratios));
+    }
+  }, [ratios]);
+
+  const ratioTotal = Math.round(Object.values(ratios).reduce((s, v) => s + v * 100, 0));
+  const isDefaultRatio = CATEGORY_ORDER.every(
+    (cat) => Math.abs((ratios[cat] ?? 0) - DEFAULT_RATIO[cat]) < 0.001,
+  );
+
+  function handleRatioChange(cat: string, pct: number) {
+    const clamped = Math.max(0, Math.min(100, pct));
+    setRatios((prev) => ({ ...prev, [cat]: Math.round(clamped) / 100 }));
+  }
+
+  function resetRatios() {
+    setRatios({ ...DEFAULT_RATIO });
+  }
+
   // Swap state
   const [swapTarget, setSwapTarget] = useState<string | null>(null);
   const [swapAlts, setSwapAlts] = useState<Record<string, BuildComponent[]>>({});
@@ -193,7 +229,8 @@ export default function BuildEstimatorPanel() {
     setEstimate(null);
     setSwapTarget(null);
     setSwapAlts({});
-    const result = await fetchBuildEstimate(budget, currency);
+    // 기본값과 다를 때만 ratios 전달
+    const result = await fetchBuildEstimate(budget, currency, isDefaultRatio ? undefined : ratios);
     setEstimate(result);
     setLoading(false);
   }
@@ -418,13 +455,83 @@ export default function BuildEstimatorPanel() {
               </div>
             </div>
 
+            {/* 예산 비율 설정 */}
+            <div className="rounded-lg border border-gray-700 overflow-hidden">
+              <button
+                onClick={() => setShowRatioEditor((v) => !v)}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
+              >
+                <span className="flex items-center gap-1.5">
+                  ⚙️ <span className="font-medium">예산 비율 설정</span>
+                  {!isDefaultRatio && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-900/60 text-indigo-300 border border-indigo-700/50">
+                      커스텀
+                    </span>
+                  )}
+                </span>
+                <span className={`font-mono text-[11px] ${ratioTotal === 100 ? 'text-green-400' : 'text-red-400'}`}>
+                  합계 {ratioTotal}% {showRatioEditor ? '▲' : '▼'}
+                </span>
+              </button>
+
+              {showRatioEditor && (
+                <div className="border-t border-gray-700 px-3 py-2.5 space-y-2 bg-gray-800/40">
+                  {CATEGORY_ORDER.map((cat) => {
+                    const pct = Math.round((ratios[cat] ?? DEFAULT_RATIO[cat]) * 100);
+                    return (
+                      <div key={cat} className="flex items-center gap-2">
+                        <span className="text-sm w-5 text-center shrink-0">{CATEGORY_ICONS[cat]}</span>
+                        <span className="text-xs text-gray-400 w-16 shrink-0">{CATEGORY_LABELS[cat]}</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={60}
+                          value={pct}
+                          onChange={(e) => handleRatioChange(cat, Number(e.target.value))}
+                          className="flex-1 h-1.5 accent-indigo-500"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={pct}
+                          onChange={(e) => handleRatioChange(cat, Number(e.target.value))}
+                          className="w-12 text-center bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                        />
+                        <span className="text-xs text-gray-500 shrink-0">%</span>
+                      </div>
+                    );
+                  })}
+
+                  <div className="flex items-center justify-between pt-1 border-t border-gray-700/60">
+                    <span className={`text-xs font-mono font-semibold ${ratioTotal === 100 ? 'text-green-400' : 'text-red-400'}`}>
+                      {ratioTotal === 100 ? '✓ 합계 100%' : `⚠ 합계 ${ratioTotal}% — 100%가 되어야 합니다`}
+                    </span>
+                    {!isDefaultRatio && (
+                      <button
+                        onClick={resetRatios}
+                        className="text-xs px-2.5 py-1 rounded-md border border-gray-600 text-gray-400 hover:text-white hover:border-gray-400 transition-colors"
+                      >
+                        초기화
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <Button
               onClick={handleEstimate}
-              disabled={loading || budget < 100}
+              disabled={loading || budget < 100 || ratioTotal !== 100}
               className="w-full"
             >
               {loading ? '계산 중...' : '견적 계산하기'}
             </Button>
+            {ratioTotal !== 100 && (
+              <p className="text-[11px] text-red-400 text-center -mt-1">
+                비율 합계가 100%가 되어야 견적을 계산할 수 있습니다
+              </p>
+            )}
 
             {/* 드래그 힌트 배너 */}
             {isDragging && (

@@ -209,9 +209,10 @@ export interface SavedBuild {
 export async function fetchBuildEstimate(
   budget: number,
   currency: string,
+  ratios?: Record<string, number>,
 ): Promise<BuildEstimate | null> {
   try {
-    return await api.post<BuildEstimate>('/builds/estimate', { budget, currency });
+    return await api.post<BuildEstimate>('/builds/estimate', { budget, currency, ...(ratios ? { ratios } : {}) });
   } catch {
     return null;
   }

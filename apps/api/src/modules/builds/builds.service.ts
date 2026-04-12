@@ -42,7 +42,24 @@ export class BuildsService {
   constructor(@Inject(DATABASE_TOKEN) private db: Database) {}
 
   async estimate(dto: EstimateBuildDto) {
-    const { budget, currency = 'USD' } = dto;
+    const { budget, currency = 'USD', ratios: customRatios } = dto;
+
+    // Merge custom ratios with defaults; normalise so they sum to 1.0
+    let effectiveRatio: Record<string, number> = { ...BUDGET_RATIO };
+    if (customRatios && Object.keys(customRatios).length > 0) {
+      // Only accept keys that exist in BUDGET_RATIO
+      const merged: Record<string, number> = {};
+      for (const key of Object.keys(BUDGET_RATIO)) {
+        merged[key] = customRatios[key] ?? BUDGET_RATIO[key];
+      }
+      const total = Object.values(merged).reduce((s, v) => s + v, 0);
+      if (total > 0) {
+        for (const key of Object.keys(merged)) {
+          merged[key] = merged[key] / total;
+        }
+      }
+      effectiveRatio = merged;
+    }
 
     // For each category, find the best (most expensive ≤ budget) product
     // whose latest price record was within the last 14 days and is in stock.
@@ -50,7 +67,7 @@ export class BuildsService {
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
 
     const components = await Promise.all(
-      Object.entries(BUDGET_RATIO).map(async ([categorySlug, ratio]) => {
+      Object.entries(effectiveRatio).map(async ([categorySlug, ratio]) => {
         const allocation = budget * ratio;
         const dbSlugs = CATEGORY_DB_SLUGS[categorySlug] ?? [categorySlug];
         const slugCond =
