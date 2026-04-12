@@ -148,15 +148,15 @@ export default function BuildEstimatorPanel() {
   >([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
 
-  // 비율 설정
-  const [ratios, setRatios] = useState<Record<string, number>>(() => {
-    if (typeof window === 'undefined') return { ...DEFAULT_RATIO };
+  // 비율 설정 — 초기값은 항상 DEFAULT_RATIO, 마운트 후 localStorage에서 덮어씀
+  const [ratios, setRatios] = useState<Record<string, number>>({ ...DEFAULT_RATIO });
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem(RATIO_LS_KEY);
-      if (saved) return JSON.parse(saved) as Record<string, number>;
+      if (saved) setRatios(JSON.parse(saved) as Record<string, number>);
     } catch { /* ignore */ }
-    return { ...DEFAULT_RATIO };
-  });
+  }, []);
   const [showRatioEditor, setShowRatioEditor] = useState(false);
 
   // ratios를 localStorage에 저장

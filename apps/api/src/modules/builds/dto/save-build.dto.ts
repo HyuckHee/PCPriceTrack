@@ -56,6 +56,10 @@ export class BuildComponentDto {
   @IsOptional()
   @IsNumber()
   budgetAllocation?: number;
+
+  @IsOptional()
+  @IsNumber()
+  originalPrice?: number | null;
 }
 
 export class SaveBuildDto {
