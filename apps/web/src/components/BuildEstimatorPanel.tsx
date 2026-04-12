@@ -62,7 +62,7 @@ function getDefaultPos() {
 
 export default function BuildEstimatorPanel() {
   const { isOpen, close } = useBuildEstimator();
-  const { openSidebar } = useBuildDetailSidebar();
+  const { openSidebar, lastDeletedId } = useBuildDetailSidebar();
   const { displayCurrency: currency, usdToKrw } = useCurrency();
 
   // Drag state — initialize with static value to avoid SSR/client mismatch
@@ -165,6 +165,12 @@ export default function BuildEstimatorPanel() {
       localStorage.setItem(RATIO_LS_KEY, JSON.stringify(ratios));
     }
   }, [ratios]);
+
+  // 사이드바에서 견적 삭제 시 로컬 목록에서 즉시 제거 (재조회 없음)
+  useEffect(() => {
+    if (!lastDeletedId) return;
+    setSavedBuilds((prev) => prev.filter((b) => b.id !== lastDeletedId));
+  }, [lastDeletedId]);
 
   const ratioTotal = Math.round(Object.values(ratios).reduce((s, v) => s + v * 100, 0));
   const isDefaultRatio = CATEGORY_ORDER.every(

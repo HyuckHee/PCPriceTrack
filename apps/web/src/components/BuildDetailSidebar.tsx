@@ -34,7 +34,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 const CATEGORY_ORDER = ['gpu', 'cpu', 'motherboard', 'ram', 'psu', 'ssd', 'cooler'];
 
 export default function BuildDetailSidebar() {
-  const { isOpen, selectedBuild, isModified, closeSidebar, updateComponent, resetModified } = useBuildDetailSidebar();
+  const { isOpen, selectedBuild, isModified, closeSidebar, updateComponent, resetModified, notifyDeleted } = useBuildDetailSidebar();
   const { displayCurrency: currency, usdToKrw } = useCurrency();
 
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -52,6 +52,7 @@ export default function BuildDetailSidebar() {
         { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
       );
       if (!res.ok) throw new Error();
+      notifyDeleted(selectedBuild.id);
       toast.success('견적이 삭제되었습니다.');
       closeSidebar();
     } catch {

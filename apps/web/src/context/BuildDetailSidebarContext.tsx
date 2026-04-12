@@ -17,10 +17,12 @@ interface BuildDetailSidebarContextValue {
   isOpen: boolean;
   selectedBuild: BuildDetail | null;
   isModified: boolean;
+  lastDeletedId: string | null;
   openSidebar: (build: BuildDetail) => void;
   closeSidebar: () => void;
   updateComponent: (categorySlug: string, comp: BuildComponent) => void;
   resetModified: () => void;
+  notifyDeleted: (id: string) => void;
 }
 
 const BuildDetailSidebarContext = createContext<BuildDetailSidebarContextValue | null>(null);
@@ -29,6 +31,7 @@ export function BuildDetailSidebarProvider({ children }: { children: React.React
   const [isOpen, setIsOpen] = useState(false);
   const [selectedBuild, setSelectedBuild] = useState<BuildDetail | null>(null);
   const [isModified, setIsModified] = useState(false);
+  const [lastDeletedId, setLastDeletedId] = useState<string | null>(null);
 
   const openSidebar = useCallback((build: BuildDetail) => {
     setSelectedBuild(build);
@@ -55,9 +58,10 @@ export function BuildDetailSidebarProvider({ children }: { children: React.React
   }, []);
 
   const resetModified = useCallback(() => setIsModified(false), []);
+  const notifyDeleted = useCallback((id: string) => setLastDeletedId(id), []);
 
   return (
-    <BuildDetailSidebarContext.Provider value={{ isOpen, selectedBuild, isModified, openSidebar, closeSidebar, updateComponent, resetModified }}>
+    <BuildDetailSidebarContext.Provider value={{ isOpen, selectedBuild, isModified, lastDeletedId, openSidebar, closeSidebar, updateComponent, resetModified, notifyDeleted }}>
       {children}
     </BuildDetailSidebarContext.Provider>
   );
