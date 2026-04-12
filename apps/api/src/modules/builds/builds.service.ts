@@ -7,17 +7,34 @@ import { SaveBuildDto } from './dto/save-build.dto';
 
 // Budget allocation per category (must sum to 1.0)
 const BUDGET_RATIO: Record<string, number> = {
-  gpu: 0.40,
-  cpu: 0.25,
-  ram: 0.20,
-  ssd: 0.15,
+  gpu: 0.35,
+  cpu: 0.20,
+  motherboard: 0.15,
+  ram: 0.10,
+  psu: 0.08,
+  ssd: 0.08,
+  cooler: 0.04,
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
   gpu: '그래픽카드',
   cpu: 'CPU',
   ram: '메모리',
-  ssd: 'SSD',
+  ssd: 'SSD/HDD',
+  motherboard: '메인보드',
+  psu: '파워',
+  cooler: '쿨러',
+};
+
+// Some estimator slots map to multiple DB category slugs (e.g. ssd covers both ssd + hdd)
+const CATEGORY_DB_SLUGS: Record<string, string[]> = {
+  gpu: ['gpu'],
+  cpu: ['cpu'],
+  ram: ['ram'],
+  ssd: ['ssd', 'hdd'],
+  motherboard: ['motherboard'],
+  psu: ['psu'],
+  cooler: ['cooler'],
 };
 
 @Injectable()
@@ -35,6 +52,11 @@ export class BuildsService {
     const components = await Promise.all(
       Object.entries(BUDGET_RATIO).map(async ([categorySlug, ratio]) => {
         const allocation = budget * ratio;
+        const dbSlugs = CATEGORY_DB_SLUGS[categorySlug] ?? [categorySlug];
+        const slugCond =
+          dbSlugs.length === 1
+            ? sql`c.slug = ${dbSlugs[0]}`
+            : sql`c.slug = ANY(ARRAY[${sql.raw(dbSlugs.map((s) => `'${s}'`).join(', '))}])`;
 
         const rows = await this.db.execute(sql`
           WITH latest_price AS (
@@ -52,7 +74,7 @@ export class BuildsService {
             INNER JOIN stores s ON pl.store_id = s.id
             INNER JOIN products p ON pl.product_id = p.id
             INNER JOIN categories c ON p.category_id = c.id
-            WHERE c.slug = ${categorySlug}
+            WHERE ${slugCond}
               AND pl.is_active = true
               AND pr.recorded_at >= ${twoWeeksAgo.toISOString()}
               AND pr.in_stock = true
@@ -137,6 +159,12 @@ export class BuildsService {
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
     const limitNum = Math.min(Math.max(1, limit), 10);
 
+    const dbSlugs = CATEGORY_DB_SLUGS[category] ?? [category];
+    const slugCond =
+      dbSlugs.length === 1
+        ? sql`c.slug = ${dbSlugs[0]}`
+        : sql`c.slug = ANY(ARRAY[${sql.raw(dbSlugs.map((s) => `'${s}'`).join(', '))}])`;
+
     const rows = await this.db.execute(sql`
       WITH latest_price AS (
         SELECT DISTINCT ON (pr.listing_id)
@@ -153,7 +181,7 @@ export class BuildsService {
         INNER JOIN stores s ON pl.store_id = s.id
         INNER JOIN products p ON pl.product_id = p.id
         INNER JOIN categories c ON p.category_id = c.id
-        WHERE c.slug = ${category}
+        WHERE ${slugCond}
           AND pl.is_active = true
           AND pr.recorded_at >= ${twoWeeksAgo.toISOString()}
           AND pr.in_stock = true

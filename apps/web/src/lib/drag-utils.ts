@@ -4,9 +4,19 @@ export const DRAG_TYPE = 'application/pcpt-product';
 
 export const CATEGORY_NAME_TO_SLUG: Record<string, string> = {
   '그래픽카드': 'gpu',
+  'GPU': 'gpu',
   'CPU': 'cpu',
   '메모리': 'ram',
+  'RAM': 'ram',
   'SSD': 'ssd',
+  'HDD': 'ssd',
+  'SSD/HDD': 'ssd',
+  '메인보드': 'motherboard',
+  'Motherboard': 'motherboard',
+  '파워': 'psu',
+  'PSU': 'psu',
+  '쿨러': 'cooler',
+  'Cooler': 'cooler',
 };
 
 export const CATEGORY_ICONS: Record<string, string> = {
@@ -14,6 +24,10 @@ export const CATEGORY_ICONS: Record<string, string> = {
   cpu: '⚡',
   ram: '💾',
   ssd: '💿',
+  hdd: '💿',
+  motherboard: '🖥️',
+  psu: '🔌',
+  cooler: '❄️',
 };
 
 export interface DragProductPayload {

@@ -14,16 +14,24 @@ const CATEGORY_ICONS: Record<string, string> = {
   cpu: '⚡',
   ram: '💾',
   ssd: '💿',
+  hdd: '💿',
+  motherboard: '🖥️',
+  psu: '🔌',
+  cooler: '❄️',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
   gpu: '그래픽카드',
   cpu: 'CPU',
   ram: '메모리',
-  ssd: 'SSD',
+  ssd: 'SSD/HDD',
+  hdd: 'SSD/HDD',
+  motherboard: '메인보드',
+  psu: '파워',
+  cooler: '쿨러',
 };
 
-const CATEGORY_ORDER = ['gpu', 'cpu', 'ram', 'ssd'];
+const CATEGORY_ORDER = ['gpu', 'cpu', 'motherboard', 'ram', 'psu', 'ssd', 'cooler'];
 
 export default function BuildDetailSidebar() {
   const { isOpen, selectedBuild, isModified, closeSidebar, updateComponent, resetModified } = useBuildDetailSidebar();
@@ -107,8 +115,10 @@ export default function BuildDetailSidebar() {
         storeName: payload.storeNames?.split(', ')[0] ?? null,
         inStock: true,
       };
-      updateComponent(cat, newComp);
-      setFlashCat(cat);
+      // hdd 슬롯은 견적에서 'ssd'로 통합 처리
+      const targetCat = cat === 'hdd' ? 'ssd' : cat;
+      updateComponent(targetCat, { ...newComp, category: targetCat });
+      setFlashCat(targetCat);
       setTimeout(() => setFlashCat(null), 800);
       toast.success(`${CATEGORY_LABELS[cat] ?? cat} 교체됨!`);
     } catch {
@@ -117,8 +127,13 @@ export default function BuildDetailSidebar() {
   }
 
   const orderedComponents = selectedBuild
-    ? CATEGORY_ORDER
-        .map((cat) => ({ cat, comp: selectedBuild.components.find((c) => c.category === cat) ?? null }))
+    ? CATEGORY_ORDER.map((cat) => ({
+        cat,
+        // ssd 슬롯은 hdd 카테고리 제품도 표시
+        comp: selectedBuild.components.find((c) =>
+          c.category === cat || (cat === 'ssd' && c.category === 'hdd'),
+        ) ?? null,
+      }))
     : [];
 
   const totalDisplay = selectedBuild?.totalPrice

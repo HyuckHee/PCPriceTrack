@@ -19,19 +19,34 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { DRAG_TYPE, type DragProductPayload } from '@/lib/drag-utils';
 
-const CATEGORY_ORDER = ['gpu', 'cpu', 'ram', 'ssd'];
+const CATEGORY_ORDER = ['gpu', 'cpu', 'motherboard', 'ram', 'psu', 'ssd', 'cooler'];
 const CATEGORY_ICONS: Record<string, string> = {
   gpu: '🎮',
   cpu: '⚡',
   ram: '💾',
   ssd: '💿',
+  motherboard: '🖥️',
+  psu: '🔌',
+  cooler: '❄️',
+};
+const CATEGORY_LABELS: Record<string, string> = {
+  gpu: '그래픽카드',
+  cpu: 'CPU',
+  ram: '메모리',
+  ssd: 'SSD/HDD',
+  motherboard: '메인보드',
+  psu: '파워',
+  cooler: '쿨러',
+};
+const BUDGET_RATIO: Record<string, number> = {
+  gpu: 0.35, cpu: 0.20, motherboard: 0.15, ram: 0.10, psu: 0.08, ssd: 0.08, cooler: 0.04,
 };
 
 const USD_PRESETS = [500, 800, 1000, 1500, 2000];
 const KRW_PRESETS = [700000, 1000000, 1500000, 2000000, 3000000];
 
 const PANEL_W = 380;
-const PANEL_H = 560;
+const PANEL_H = 700;
 
 function getDefaultPos() {
   if (typeof window === 'undefined') return { x: 0, y: 80 };
@@ -211,7 +226,7 @@ export default function BuildEstimatorPanel() {
     if (swapAlts[cat]) return; // already cached
 
     setLoadingSwap((prev) => ({ ...prev, [cat]: true }));
-    const allocation = estimate ? estimate.budget * ({ gpu: 0.40, cpu: 0.25, ram: 0.20, ssd: 0.15 }[cat] ?? 0.25) : 0;
+    const allocation = estimate ? estimate.budget * (BUDGET_RATIO[cat] ?? 0.10) : 0;
     const alts = await fetchBuildAlternatives(
       cat,
       allocation,
@@ -257,15 +272,14 @@ export default function BuildEstimatorPanel() {
     try {
       const payload = JSON.parse(raw) as DragProductPayload;
       const cat = payload.categorySlug;
-      const catLabel: Record<string, string> = { gpu: '그래픽카드', cpu: 'CPU', ram: '메모리', ssd: 'SSD' };
-      if (!catLabel[cat]) return;
+      if (!CATEGORY_LABELS[cat]) return;
       if (!estimate) {
         toast.error('먼저 견적을 계산한 후 교체해주세요.');
         return;
       }
       const newComp: BuildComponent = {
         category: cat,
-        categoryName: catLabel[cat],
+        categoryName: CATEGORY_LABELS[cat],
         productId: payload.productId,
         productName: payload.productName,
         slug: payload.slug,
@@ -286,7 +300,7 @@ export default function BuildEstimatorPanel() {
       setSwapAlts((prev) => { const next = { ...prev }; delete next[cat]; return next; });
       setFlashCat(cat);
       setTimeout(() => setFlashCat(null), 800);
-      toast.success(`${catLabel[cat]} 교체됨!`);
+      toast.success(`${CATEGORY_LABELS[cat]} 교체됨!`);
       if (newTotal > estimate.budget) {
         const over = newTotal - estimate.budget;
         toast.warning(`예산 초과! ${formatPrice(convertPrice(over, payload.currency, currency, usdToKrw), currency)} 초과됩니다.`);
@@ -600,7 +614,7 @@ export default function BuildEstimatorPanel() {
                   <div className="space-y-1">
                     {build.components.map((c) => (
                       <div key={c.productId} className="flex justify-between text-xs">
-                        <span className="text-gray-400 truncate">{CATEGORY_ICONS[c.category]} {c.productName}</span>
+                        <span className="text-gray-400 truncate">{CATEGORY_ICONS[c.category] ?? '📦'} {c.productName}</span>
                         <div className="shrink-0 ml-2 text-right">
                           {c.originalPrice && c.originalPrice > c.price ? (
                             <div className="flex items-center gap-1">
