@@ -331,6 +331,7 @@ export default function BuildDetailSidebar() {
           )}
           <button
             onClick={() => {
+              if (!selectedBuild) return;
               openWithBudget(Number(selectedBuild.budget), selectedBuild.currency);
               closeSidebar();
             }}

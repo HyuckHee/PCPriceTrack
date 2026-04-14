@@ -59,7 +59,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     <Link href="/products" className="hover:text-white transition-colors">상품</Link>
                     <Link href="/deals" className="hover:text-white transition-colors">특가</Link>
                     <Link href="/alerts" className="hover:text-white transition-colors">가격 알림</Link>
-                    <Link href="/admin" className="hover:text-gray-300 transition-colors text-gray-600">관리</Link>
                     <AuthNav />
                   </nav>
                 </div>

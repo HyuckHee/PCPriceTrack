@@ -177,12 +177,27 @@ export default function AdminPage() {
     } catch {}
   }, []);
 
-  const handleLogin = () => {
-    localStorage.setItem('admin_key', adminKey);
-    setSavedKey(adminKey);
-    fetchStatus(adminKey);
-    fetchJobs(adminKey);
-    fetchSchedules(adminKey);
+  const handleLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/admin/crawler/status`, {
+        headers: { 'x-admin-key': adminKey },
+      });
+      if (res.status === 401) throw new Error('어드민 키가 올바르지 않습니다');
+      if (!res.ok) throw new Error('서버 오류');
+      const data = await res.json();
+      // 검증 성공 후에만 저장 및 상태 전환
+      localStorage.setItem('admin_key', adminKey);
+      setSavedKey(adminKey);
+      setStores(data);
+      fetchJobs(adminKey);
+      fetchSchedules(adminKey);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '오류 발생');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

@@ -29,6 +29,11 @@ export default function AuthNav() {
     return (
       <>
         <div className="flex items-center gap-3">
+          {user.role === 'admin' && (
+            <Link href="/admin" className="text-indigo-400 hover:text-indigo-300 transition-colors text-sm font-medium">
+              관리
+            </Link>
+          )}
           <span className="text-gray-300 text-sm">{user.name ?? user.email}</span>
           <button
             onClick={() => { setClearKakao(false); setShowModal(true); }}
