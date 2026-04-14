@@ -57,8 +57,8 @@ export default function LoginPage() {
         )}
         <input
           name="email"
-          type="email"
-          placeholder="Email"
+          type="text"
+          placeholder="아이디 (이메일 또는 사용자명)"
           required
           className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500"
         />
