@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { toast } from 'sonner';
 import { useBuildDetailSidebar } from '@/context/BuildDetailSidebarContext';
+import { useBuildEstimator } from '@/context/BuildEstimatorContext';
 import { useCurrency } from '@/context/CurrencyContext';
 import { formatPrice, convertPrice } from '@/lib/format';
 import { BuildComponent, saveBuild } from '@/lib/data';
@@ -35,6 +36,7 @@ const CATEGORY_ORDER = ['gpu', 'cpu', 'motherboard', 'ram', 'psu', 'ssd', 'coole
 
 export default function BuildDetailSidebar() {
   const { isOpen, selectedBuild, isModified, closeSidebar, updateComponent, resetModified, notifyDeleted } = useBuildDetailSidebar();
+  const { openWithBudget } = useBuildEstimator();
   const { displayCurrency: currency, usdToKrw } = useCurrency();
 
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -327,6 +329,15 @@ export default function BuildDetailSidebar() {
               {saving ? '저장 중...' : '💾 변경 내용 새 견적으로 저장'}
             </button>
           )}
+          <button
+            onClick={() => {
+              openWithBudget(Number(selectedBuild.budget), selectedBuild.currency);
+              closeSidebar();
+            }}
+            className="w-full py-2 rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white text-sm font-medium transition-colors"
+          >
+            🔁 이 견적으로 다시 견적짜기
+          </button>
           <button
             onClick={handleDelete}
             className="w-full py-2 rounded-lg border border-red-700/60 text-red-400 hover:bg-red-900/30 text-sm transition-colors"

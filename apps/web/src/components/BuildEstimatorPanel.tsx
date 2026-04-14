@@ -61,7 +61,7 @@ function getDefaultPos() {
 }
 
 export default function BuildEstimatorPanel() {
-  const { isOpen, close } = useBuildEstimator();
+  const { isOpen, close, pendingBudget, clearPendingBudget } = useBuildEstimator();
   const { openSidebar, lastDeletedId } = useBuildDetailSidebar();
   const { displayCurrency: currency, usdToKrw } = useCurrency();
 
@@ -77,10 +77,21 @@ export default function BuildEstimatorPanel() {
   useEffect(() => {
     if (isOpen) {
       setPos(getDefaultPos());
-      // 패널 열릴 때 저장된 견적 자동 로드
       loadSavedBuilds();
     }
   }, [isOpen]);
+
+  // 사이드바에서 "다시 견적짜기"로 열린 경우 예산 적용
+  useEffect(() => {
+    if (!isOpen || !pendingBudget) return;
+    setBudget(pendingBudget.budget);
+    setInputValue(String(pendingBudget.budget));
+    setEstimate(null);
+    setSwapTarget(null);
+    setSwapAlts({});
+    setTab('estimate');
+    clearPendingBudget();
+  }, [isOpen, pendingBudget, clearPendingBudget]);
 
   const onHeaderMouseDown = useCallback(
     (e: React.MouseEvent) => {
