@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ilike, or, count, desc } from 'drizzle-orm';
 import { Database, DATABASE_TOKEN } from '../../database/database.provider';
 import { users, User, SafeUser } from '../../database/schema/users';
 
@@ -94,6 +94,44 @@ export class UsersService {
       .from(users)
       .where(eq(users.id, id))
       .limit(1);
+    return result[0];
+  }
+
+  async listUsers(params: {
+    search?: string;
+    page: number;
+    limit: number;
+  }): Promise<{ data: SafeUser[]; total: number }> {
+    const { search, page, limit } = params;
+    const offset = (page - 1) * limit;
+
+    const where = search
+      ? or(ilike(users.email, `%${search}%`), ilike(users.name, `%${search}%`))
+      : undefined;
+
+    const [data, totalRows] = await Promise.all([
+      this.db
+        .select(safeUserFields)
+        .from(users)
+        .where(where)
+        .orderBy(desc(users.createdAt))
+        .limit(limit)
+        .offset(offset),
+      this.db
+        .select({ count: count() })
+        .from(users)
+        .where(where),
+    ]);
+
+    return { data, total: totalRows[0]?.count ?? 0 };
+  }
+
+  async setUserRole(id: string, role: 'user' | 'admin'): Promise<SafeUser | undefined> {
+    const result = await this.db
+      .update(users)
+      .set({ role, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning(safeUserFields);
     return result[0];
   }
 }

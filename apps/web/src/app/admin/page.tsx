@@ -68,6 +68,16 @@ interface CrawlJob {
   metadata: Record<string, unknown>;
 }
 
+interface AdminUser {
+  id: string;
+  email: string;
+  name: string | null;
+  role: 'user' | 'admin';
+  provider: string | null;
+  isVerified: boolean;
+  createdAt: string;
+}
+
 interface ScheduleConfig {
   key: string;
   label: string;
@@ -124,8 +134,16 @@ export default function AdminPage() {
   const [runningSchedule, setRunningSchedule] = useState<string | null>(null);
   const [triggeringAll, setTriggeringAll] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('gpu');
-  const [activeTab, setActiveTab] = useState<'stores' | 'schedule' | 'jobs'>('stores');
+  const [activeTab, setActiveTab] = useState<'stores' | 'schedule' | 'jobs' | 'users'>('stores');
   const [toast, setToast] = useState('');
+
+  // 유저 관리 상태
+  const [userList, setUserList] = useState<AdminUser[]>([]);
+  const [userMeta, setUserMeta] = useState({ total: 0, page: 1, totalPages: 1 });
+  const [userSearch, setUserSearch] = useState('');
+  const [userPage, setUserPage] = useState(1);
+  const [userLoading, setUserLoading] = useState(false);
+  const [togglingRole, setTogglingRole] = useState<string | null>(null);
 
   // 스케줄 편집 상태
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -177,6 +195,21 @@ export default function AdminPage() {
     } catch {}
   }, []);
 
+  const fetchUsers = useCallback(async (key: string, search: string, page: number) => {
+    setUserLoading(true);
+    try {
+      const qs = new URLSearchParams({ page: String(page), limit: '20' });
+      if (search.trim()) qs.set('search', search.trim());
+      const res = await fetch(`${API_BASE}/admin/users?${qs}`, { headers: { 'x-admin-key': key } });
+      if (res.ok) {
+        const data = await res.json() as { data: AdminUser[]; meta: { total: number; page: number; totalPages: number } };
+        setUserList(data.data);
+        setUserMeta(data.meta);
+      }
+    } catch {}
+    finally { setUserLoading(false); }
+  }, []);
+
   const handleLogin = async () => {
     setLoading(true);
     setError('');
@@ -211,6 +244,11 @@ export default function AdminPage() {
     }, 30_000);
     return () => clearInterval(id);
   }, [savedKey, fetchStatus, fetchJobs, fetchSchedules]);
+
+  useEffect(() => {
+    if (!savedKey || activeTab !== 'users') return;
+    fetchUsers(savedKey, userSearch, userPage);
+  }, [savedKey, activeTab, userPage, fetchUsers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleStore = async (storeId: string, current: boolean) => {
     setTogglingId(storeId);
@@ -327,6 +365,28 @@ export default function AdminPage() {
     } catch { showToast('리셋 실패'); }
   };
 
+  const toggleUserRole = async (user: AdminUser) => {
+    setTogglingRole(user.id);
+    const newRole = user.role === 'admin' ? 'user' : 'admin';
+    try {
+      const res = await fetch(`${API_BASE}/admin/users/${user.id}/role`, {
+        method: 'PATCH',
+        headers: { 'x-admin-key': savedKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole }),
+      });
+      if (!res.ok) throw new Error();
+      setUserList(prev => prev.map(u => u.id === user.id ? { ...u, role: newRole } : u));
+      showToast(`${user.email} → ${newRole === 'admin' ? '관리자' : '일반 유저'}로 변경`);
+    } catch { showToast('역할 변경 실패'); }
+    finally { setTogglingRole(null); }
+  };
+
+  const handleUserSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setUserPage(1);
+    fetchUsers(savedKey, userSearch, 1);
+  };
+
   const naverUsage = calcNaverUsage(schedules, naverListingCount);
   const usagePct = Math.min(100, Math.round((naverUsage.total / 100000) * 100));
 
@@ -378,10 +438,10 @@ export default function AdminPage() {
 
       {/* 탭 */}
       <div className="flex gap-1 bg-gray-900 p-1 rounded-lg w-fit">
-        {(['stores', 'schedule', 'jobs'] as const).map(tab => (
+        {(['stores', 'schedule', 'jobs', 'users'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={`px-4 py-1.5 text-sm rounded-md font-medium transition-colors ${activeTab === tab ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}>
-            {tab === 'stores' ? `스토어 (${stores.length})` : tab === 'schedule' ? '크롤링 주기' : '작업 로그'}
+            {tab === 'stores' ? `스토어 (${stores.length})` : tab === 'schedule' ? '크롤링 주기' : tab === 'jobs' ? '작업 로그' : `유저 관리`}
           </button>
         ))}
       </div>
@@ -627,6 +687,97 @@ export default function AdminPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* ── 유저 관리 탭 ── */}
+      {activeTab === 'users' && (
+        <div className="space-y-4">
+          {/* 검색 */}
+          <form onSubmit={handleUserSearch} className="flex gap-2">
+            <input
+              type="text"
+              value={userSearch}
+              onChange={e => setUserSearch(e.target.value)}
+              placeholder="이메일 또는 이름으로 검색"
+              className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+            />
+            <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg transition-colors">
+              검색
+            </button>
+            {userSearch && (
+              <button type="button" onClick={() => { setUserSearch(''); setUserPage(1); fetchUsers(savedKey, '', 1); }}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg transition-colors">
+                초기화
+              </button>
+            )}
+          </form>
+
+          {/* 총계 */}
+          <div className="flex items-center justify-between text-sm text-gray-400">
+            <span>총 {userMeta.total.toLocaleString()}명</span>
+            {userLoading && <span className="animate-pulse">불러오는 중...</span>}
+          </div>
+
+          {/* 유저 목록 */}
+          <div className="bg-gray-900 border border-gray-700 rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-700 text-left">
+                  <th className="px-4 py-3 text-gray-400 font-medium">이메일</th>
+                  <th className="px-4 py-3 text-gray-400 font-medium">이름</th>
+                  <th className="px-4 py-3 text-gray-400 font-medium">공급자</th>
+                  <th className="px-4 py-3 text-gray-400 font-medium">역할</th>
+                  <th className="px-4 py-3 text-gray-400 font-medium">가입일</th>
+                  <th className="px-4 py-3 text-gray-400 font-medium">역할 변경</th>
+                </tr>
+              </thead>
+              <tbody>
+                {userList.map(user => (
+                  <tr key={user.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                    <td className="px-4 py-3 text-white font-mono text-xs">{user.email}</td>
+                    <td className="px-4 py-3 text-gray-300">{user.name ?? <span className="text-gray-600">-</span>}</td>
+                    <td className="px-4 py-3 text-gray-400 text-xs">{user.provider ?? 'email'}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-indigo-900 text-indigo-300' : 'bg-gray-800 text-gray-400'}`}>
+                        {user.role === 'admin' ? '관리자' : '유저'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                      {new Date(user.createdAt).toLocaleDateString('ko-KR')}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => toggleUserRole(user)}
+                        disabled={togglingRole === user.id}
+                        className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors disabled:opacity-50 ${user.role === 'admin' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-indigo-700 hover:bg-indigo-600 text-white'}`}
+                      >
+                        {togglingRole === user.id ? '...' : user.role === 'admin' ? '관리자 해제' : '관리자 등록'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {userList.length === 0 && !userLoading && (
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">유저가 없습니다</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 페이지네이션 */}
+          {userMeta.totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2">
+              <button onClick={() => setUserPage(p => Math.max(1, p - 1))} disabled={userPage <= 1}
+                className="px-3 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg disabled:opacity-40 transition-colors">
+                이전
+              </button>
+              <span className="text-sm text-gray-400">{userPage} / {userMeta.totalPages}</span>
+              <button onClick={() => setUserPage(p => Math.min(userMeta.totalPages, p + 1))} disabled={userPage >= userMeta.totalPages}
+                className="px-3 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg disabled:opacity-40 transition-colors">
+                다음
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -19,16 +19,49 @@ export default async function ProductsPage({
   const minPrice = params.minPrice ?? '';
   const maxPrice = params.maxPrice ?? '';
 
-  const [{ data: products, meta }, categories, deals] = await Promise.all([
-    fetchProducts({ search, categoryId, minPrice, maxPrice, page }),
-    fetchCategories(),
-    page === '1' ? fetchDeals(5, categoryId || undefined) : Promise.resolve([]),
-  ]);
+  let products: Awaited<ReturnType<typeof fetchProducts>>['data'] = [];
+  let meta = { total: 0, page: 1, totalPages: 1 };
+  let categories: Awaited<ReturnType<typeof fetchCategories>> = [];
+  let deals: Awaited<ReturnType<typeof fetchDeals>> = [];
+  let apiError = false;
+
+  try {
+    const [productsRes, categoriesRes, dealsRes] = await Promise.all([
+      fetchProducts({ search, categoryId, minPrice, maxPrice, page }),
+      fetchCategories(),
+      page === '1' ? fetchDeals(5, categoryId || undefined) : Promise.resolve([]),
+    ]);
+    products = productsRes.data;
+    meta = productsRes.meta;
+    categories = categoriesRes;
+    deals = dealsRes;
+  } catch {
+    apiError = true;
+  }
 
   const buildUrl = (overrides: Record<string, string>) => {
     const p = new URLSearchParams({ page: '1', ...(search && { search }), ...(categoryId && { categoryId }), ...(minPrice && { minPrice }), ...(maxPrice && { maxPrice }), ...overrides });
     return `/products?${p}`;
   };
+
+  if (apiError) {
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">상품</h1>
+        </div>
+        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <p className="text-gray-400">서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.</p>
+          <a
+            href="/products"
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg transition-colors"
+          >
+            새로고침
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
