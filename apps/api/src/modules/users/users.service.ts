@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, ilike, or, count, desc } from 'drizzle-orm';
 import { Database, DATABASE_TOKEN } from '../../database/database.provider';
 import { users, User, SafeUser } from '../../database/schema/users';
+import { UserRole } from '../../common/guards/roles.guard';
 
 const safeUserFields = {
   id: users.id,
@@ -126,7 +127,7 @@ export class UsersService {
     return { data, total: totalRows[0]?.count ?? 0 };
   }
 
-  async setUserRole(id: string, role: 'user' | 'admin'): Promise<SafeUser | undefined> {
+  async setUserRole(id: string, role: UserRole): Promise<SafeUser | undefined> {
     const result = await this.db
       .update(users)
       .set({ role, updatedAt: new Date() })

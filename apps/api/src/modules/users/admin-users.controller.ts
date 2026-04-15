@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -10,30 +11,32 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { IsIn, IsOptional, IsString } from 'class-validator';
-import { Public } from '../../common/decorators/public.decorator';
-import { AdminKeyGuard } from '../../common/guards/admin-key.guard';
+import { IsIn, IsString } from 'class-validator';
+import { Roles, RolesGuard, UserRole } from '../../common/guards/roles.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { SafeUser } from '../../database/schema/users';
 import { UsersService } from './users.service';
 
 class SetRoleDto {
   @IsString()
-  @IsIn(['user', 'admin'])
-  role!: 'user' | 'admin';
+  @IsIn(['user', 'admin', 'master'])
+  role!: UserRole;
 }
 
 /**
- * Admin-only user management endpoints.
- * x-admin-key 헤더로 인증 (JWT 불필요).
+ * JWT 인증 기반 유저 관리 엔드포인트.
+ * GET  /api/admin/users         → admin 이상 접근 가능
+ * PATCH /api/admin/users/:id/role → master만 가능
  */
-@Public()
 @Controller('admin/users')
-@UseGuards(AdminKeyGuard)
+@UseGuards(RolesGuard)
 export class AdminUsersController {
   constructor(private readonly usersService: UsersService) {}
 
   /** GET /api/admin/users?search=&page=&limit= */
   @Get()
+  @Roles('admin')
   async listUsers(
     @Query('search') search?: string,
     @Query('page') page = '1',
@@ -48,21 +51,23 @@ export class AdminUsersController {
     });
     return {
       data,
-      meta: {
-        total,
-        page: pageNum,
-        totalPages: Math.ceil(total / limitNum),
-      },
+      meta: { total, page: pageNum, totalPages: Math.ceil(total / limitNum) },
     };
   }
 
   /** PATCH /api/admin/users/:id/role */
   @Patch(':id/role')
+  @Roles('master')
   @HttpCode(HttpStatus.OK)
   async setRole(
     @Param('id', ParseUuidPipe) id: string,
     @Body() body: SetRoleDto,
+    @CurrentUser() caller: SafeUser,
   ) {
+    // master가 자신의 역할을 강등하는 것 방지
+    if (caller.id === id && body.role !== 'master') {
+      throw new ForbiddenException('자신의 master 권한은 해제할 수 없습니다');
+    }
     const updated = await this.usersService.setUserRole(id, body.role);
     if (!updated) throw new NotFoundException('User not found');
     return updated;
