@@ -9,6 +9,7 @@ interface User {
   name?: string;
   avatarUrl?: string;
   role?: 'user' | 'admin' | 'master';
+  provider?: string | null;
 }
 
 interface AuthContextType {
