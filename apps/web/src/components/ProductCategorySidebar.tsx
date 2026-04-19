@@ -2,7 +2,7 @@
 
 import { useQueryStates, parseAsString } from 'nuqs';
 import { useTransition } from 'react';
-import { CATEGORY_ICONS, CATEGORY_NAME_TO_SLUG } from '@/lib/drag-utils';
+import { CATEGORY_ICONS, CATEGORY_NAME_TO_SLUG, CATEGORY_ORDER } from '@/lib/drag-utils';
 
 interface Category {
   id: string;
@@ -50,7 +50,13 @@ export function ProductCategorySidebar({ categories }: Props) {
               전체
             </button>
           </li>
-          {categories.map((cat) => {
+          {[...categories].sort((a, b) => {
+            const slugA = a.slug ?? CATEGORY_NAME_TO_SLUG[a.name];
+            const slugB = b.slug ?? CATEGORY_NAME_TO_SLUG[b.name];
+            const iA = CATEGORY_ORDER.indexOf(slugA as typeof CATEGORY_ORDER[number]);
+            const iB = CATEGORY_ORDER.indexOf(slugB as typeof CATEGORY_ORDER[number]);
+            return (iA === -1 ? 999 : iA) - (iB === -1 ? 999 : iB);
+          }).map((cat) => {
             const slug = cat.slug ?? CATEGORY_NAME_TO_SLUG[cat.name];
             const icon = slug ? (CATEGORY_ICONS[slug] ?? '📦') : '📦';
             const isActive = params.categoryId === cat.id;
