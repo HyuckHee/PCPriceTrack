@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { Pool } from 'pg';
 import { Database, DATABASE_TOKEN } from '../../database/database.provider';
 import { products } from '../../database/schema/products';
@@ -35,7 +35,16 @@ export class ProductsService {
    * 가격은 그룹 내 모든 리스팅의 최저가 ~ 최고가 범위로 표시합니다.
    */
   async list(dto: ListProductsDto) {
-    const { page = 1, limit = 20, categoryId, brand, search, minPrice, maxPrice } = dto;
+    const { page = 1, limit = 20, categoryId, brand, search, minPrice, maxPrice, sortBy = 'newest' } = dto;
+
+    const ORDER_BY_MAP: Record<string, string> = {
+      newest:    'p.created_at DESC',
+      popular:   'gp.store_count DESC NULLS LAST, p.created_at DESC',
+      price_asc: 'gp.min_price ASC NULLS LAST',
+      price_desc:'gp.min_price DESC NULLS LAST',
+      name:      'p.name ASC',
+    };
+    const orderBy = ORDER_BY_MAP[sortBy] ?? 'p.created_at DESC';
     const offset = (page - 1) * limit;
 
     // ── 동적 WHERE 파라미터 수집 ──────────────────────────────────────────
@@ -137,7 +146,7 @@ export class ProductsService {
       WHERE 1=1
       ${whereClause}
       ${priceFilterData}
-      ORDER BY p.created_at DESC
+      ORDER BY ${orderBy}
       LIMIT $${limitIdx} OFFSET $${offsetIdx}
     `;
 

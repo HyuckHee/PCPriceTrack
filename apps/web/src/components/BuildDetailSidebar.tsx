@@ -8,31 +8,7 @@ import { useBuildEstimator } from '@/context/BuildEstimatorContext';
 import { useCurrency } from '@/context/CurrencyContext';
 import { formatPrice, convertPrice } from '@/lib/format';
 import { BuildComponent, saveBuild } from '@/lib/data';
-import { DRAG_TYPE, type DragProductPayload } from '@/lib/drag-utils';
-
-const CATEGORY_ICONS: Record<string, string> = {
-  gpu: '🎮',
-  cpu: '⚡',
-  ram: '💾',
-  ssd: '💿',
-  hdd: '💿',
-  motherboard: '🖥️',
-  psu: '🔌',
-  cooler: '❄️',
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  gpu: '그래픽카드',
-  cpu: 'CPU',
-  ram: '메모리',
-  ssd: 'SSD/HDD',
-  hdd: 'SSD/HDD',
-  motherboard: '메인보드',
-  psu: '파워',
-  cooler: '쿨러',
-};
-
-const CATEGORY_ORDER = ['gpu', 'cpu', 'motherboard', 'ram', 'psu', 'ssd', 'cooler'];
+import { DRAG_TYPE, type DragProductPayload, CATEGORY_ICONS, CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/drag-utils';
 
 export default function BuildDetailSidebar() {
   const { isOpen, selectedBuild, isModified, closeSidebar, updateComponent, resetModified, notifyDeleted } = useBuildDetailSidebar();

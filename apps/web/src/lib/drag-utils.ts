@@ -30,6 +30,19 @@ export const CATEGORY_ICONS: Record<string, string> = {
   cooler: '❄️',
 };
 
+export const CATEGORY_LABELS: Record<string, string> = {
+  gpu: '그래픽카드',
+  cpu: 'CPU',
+  ram: '메모리',
+  ssd: 'SSD/HDD',
+  hdd: 'SSD/HDD',
+  motherboard: '메인보드',
+  psu: '파워',
+  cooler: '쿨러',
+};
+
+export const CATEGORY_ORDER = ['gpu', 'cpu', 'motherboard', 'ram', 'psu', 'ssd', 'cooler'] as const;
+
 export interface DragProductPayload {
   productId: string;
   productName: string;

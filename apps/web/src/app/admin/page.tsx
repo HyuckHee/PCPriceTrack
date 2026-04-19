@@ -87,6 +87,17 @@ interface ScheduleConfig {
   updatedAt: string | null;
 }
 
+interface RuntimeInfo {
+  environment: 'render' | 'local';
+  serviceName: string;
+  serviceUrl: string | null;
+  redisMode: 'disabled' | 'local' | 'upstash';
+  redisHost: string;
+  nodeEnv: string;
+  concurrency: number;
+  uptimeSeconds: number;
+}
+
 /** 사람이 읽기 쉬운 cron 표현식 프리셋 */
 const CRON_PRESETS = [
   { label: '1시간마다', value: '0 0 * * * *' },
@@ -149,6 +160,8 @@ export default function AdminPage() {
   const [userLoading, setUserLoading] = useState(false);
   const [togglingRole, setTogglingRole] = useState<string | null>(null);
 
+  const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfo | null>(null);
+
   // 스케줄 편집 상태
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editCron, setEditCron] = useState('');
@@ -199,6 +212,13 @@ export default function AdminPage() {
     } catch {}
   }, []);
 
+  const fetchRuntime = useCallback(async (key: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/crawler/runtime`, { headers: { 'x-admin-key': key } });
+      if (res.ok) setRuntimeInfo(await res.json());
+    } catch {}
+  }, []);
+
   const fetchUsers = useCallback(async (jwtToken: string, search: string, page: number) => {
     setUserLoading(true);
     try {
@@ -232,6 +252,7 @@ export default function AdminPage() {
       setStores(data);
       fetchJobs(adminKey);
       fetchSchedules(adminKey);
+      fetchRuntime(adminKey);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '오류 발생');
     } finally {
@@ -244,12 +265,13 @@ export default function AdminPage() {
     fetchStatus(savedKey);
     fetchJobs(savedKey);
     fetchSchedules(savedKey);
+    fetchRuntime(savedKey);
     const id = setInterval(() => {
       fetchStatus(savedKey);
       fetchJobs(savedKey);
     }, 30_000);
     return () => clearInterval(id);
-  }, [savedKey, fetchStatus, fetchJobs, fetchSchedules]);
+  }, [savedKey, fetchStatus, fetchJobs, fetchSchedules, fetchRuntime]);
 
   useEffect(() => {
     if (!authToken || activeTab !== 'users') return;
@@ -442,7 +464,7 @@ export default function AdminPage() {
           <button onClick={triggerAll} disabled={triggeringAll} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg font-medium transition-colors disabled:opacity-60">
             {triggeringAll ? '실행 중...' : '전체 즉시 실행'}
           </button>
-          <button onClick={() => { fetchStatus(savedKey); fetchJobs(savedKey); fetchSchedules(savedKey); }} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors">
+          <button onClick={() => { fetchStatus(savedKey); fetchJobs(savedKey); fetchSchedules(savedKey); fetchRuntime(savedKey); }} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors">
             새로고침
           </button>
           <button onClick={() => { localStorage.removeItem('admin_key'); setSavedKey(''); setAdminKey(''); }} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm rounded-lg transition-colors">
@@ -450,6 +472,37 @@ export default function AdminPage() {
           </button>
         </div>
       </div>
+
+      {/* 런타임 환경 배너 */}
+      {runtimeInfo && (
+        <div className="flex flex-wrap items-center gap-3 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-xs">
+          <span className="text-gray-500 font-medium shrink-0">크롤링 실행 위치</span>
+          <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold ${runtimeInfo.environment === 'render' ? 'bg-blue-900 text-blue-300' : 'bg-gray-800 text-gray-300'}`}>
+            {runtimeInfo.environment === 'render' ? '☁ Render' : '🖥 로컬'}
+            <span className="font-normal opacity-80">{runtimeInfo.serviceName}</span>
+          </span>
+          {runtimeInfo.serviceUrl && (
+            <a href={runtimeInfo.serviceUrl} target="_blank" rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline underline-offset-2 truncate max-w-[200px]">
+              {runtimeInfo.serviceUrl.replace('https://', '')}
+            </a>
+          )}
+          <span className={`px-2.5 py-1 rounded-full font-medium ${
+            runtimeInfo.redisMode === 'upstash' ? 'bg-purple-900 text-purple-300' :
+            runtimeInfo.redisMode === 'local' ? 'bg-green-900 text-green-300' :
+            'bg-gray-800 text-gray-500'
+          }`}>
+            Redis: {runtimeInfo.redisMode === 'disabled' ? '인메모리' : runtimeInfo.redisMode === 'upstash' ? `Upstash (${runtimeInfo.redisHost})` : `로컬 (${runtimeInfo.redisHost})`}
+          </span>
+          <span className={`px-2.5 py-1 rounded-full font-medium ${runtimeInfo.nodeEnv === 'production' ? 'bg-orange-900 text-orange-300' : 'bg-gray-800 text-gray-400'}`}>
+            {runtimeInfo.nodeEnv}
+          </span>
+          <span className="text-gray-500">동시 처리: <span className="text-gray-300">{runtimeInfo.concurrency}</span></span>
+          <span className="text-gray-600 ml-auto">
+            업타임 {Math.floor(runtimeInfo.uptimeSeconds / 3600)}h {Math.floor((runtimeInfo.uptimeSeconds % 3600) / 60)}m
+          </span>
+        </div>
+      )}
 
       {/* 탭 */}
       <div className="flex gap-1 bg-gray-900 p-1 rounded-lg w-fit">

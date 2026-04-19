@@ -128,6 +128,24 @@ export class CrawlerController {
     return { message: `Circuit breaker reset for store ${storeId}` };
   }
 
+  /** GET /api/admin/crawler/runtime — 크롤러 실행 환경 정보 */
+  @Get('runtime')
+  getRuntime() {
+    const isRender = process.env.RENDER === 'true';
+    return {
+      environment: isRender ? 'render' : 'local',
+      serviceName: process.env.RENDER_SERVICE_NAME ?? 'localhost',
+      serviceUrl: process.env.RENDER_EXTERNAL_URL ?? null,
+      redisMode: process.env.REDIS_MODE ?? 'disabled',
+      redisHost: process.env.REDIS_HOST
+        ? process.env.REDIS_HOST.replace(/(?<=.{6}).+(?=\..+\..+)/, '***')
+        : 'localhost',
+      nodeEnv: process.env.NODE_ENV ?? 'development',
+      concurrency: Number(process.env.CRAWLER_CONCURRENCY ?? 3),
+      uptimeSeconds: Math.floor(process.uptime()),
+    };
+  }
+
   /** GET /api/admin/crawler/schedules — 현재 스케줄 설정 조회 */
   @Get('schedules')
   async getSchedules() {

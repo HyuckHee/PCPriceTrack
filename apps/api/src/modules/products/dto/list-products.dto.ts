@@ -1,4 +1,4 @@
-import { IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ListProductsDto {
@@ -38,4 +38,9 @@ export class ListProductsDto {
   @Min(1)
   @Max(100)
   limit?: number = 20;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['newest', 'popular', 'price_asc', 'price_desc', 'name'])
+  sortBy?: string = 'newest';
 }
