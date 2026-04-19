@@ -368,9 +368,10 @@ export default function BuildEstimatorPanel() {
     if (t === 'saved') loadSavedBuilds();
   }
 
-  const components = estimate
-    ? CATEGORY_ORDER.map((cat) => estimate.components.find((c) => c?.category === cat) ?? null)
-    : [];
+  const components =
+    estimate && Array.isArray(estimate.components)
+      ? CATEGORY_ORDER.map((cat) => estimate.components.find((c) => c?.category === cat) ?? null)
+      : [];
 
   const displayTotal =
     estimate && estimate.totalPrice > 0
@@ -787,7 +788,7 @@ export default function BuildEstimatorPanel() {
               </div>
             )}
 
-            {estimate && estimate.components.every((c) => c === null) && (
+            {estimate && Array.isArray(estimate.components) && estimate.components.every((c) => c === null) && (
               <p className="text-center py-4 text-gray-500 text-xs">
                 해당 예산에 맞는 제품을 찾지 못했습니다.
               </p>

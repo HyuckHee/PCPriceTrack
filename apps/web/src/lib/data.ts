@@ -234,7 +234,8 @@ export async function fetchBuildEstimate(
   try {
     // New builder endpoint when usage is provided
     if (usage) {
-      return await api.post<BuildEstimate>('/builder/estimate', { budget, usage });
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') ?? undefined : undefined;
+      return await api.post<BuildEstimate>('/builder/estimate', { budget, usage }, token);
     }
     return await api.post<BuildEstimate>('/builds/estimate', { budget, currency, ...(ratios ? { ratios } : {}) });
   } catch {
