@@ -21,21 +21,27 @@ export class EstimateRequestDto {
 
 export interface SelectedPart {
   category: string;
+  categoryName: string;
   productId: string;
-  name: string;
+  productName: string;
+  slug: string;
   brand: string;
+  imageUrl: string | null;
   price: number;
   currency: string;
-  imageUrl?: string | null;
+  storeUrl: string | null;
+  storeName: string | null;
+  inStock: boolean;
   specs: Record<string, unknown>;
   performanceScore?: number | null;
 }
 
 export interface EstimateResponseDto {
-  parts: SelectedPart[];
+  budget: number;
+  currency: string;
   totalPrice: number;
   budgetUsed: number;
-  currency: string;
+  components: SelectedPart[];
   warnings: Array<{ severity: 'error' | 'warning'; rule: string; message: string }>;
   performanceSummary: {
     cpuScore: number | null;

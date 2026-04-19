@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, asc, eq, gte, isNotNull, lte, sql } from 'drizzle-orm';
 import { DATABASE_TOKEN, Database } from '../../database/database.provider';
-import { categories, productListings, priceRecords, products } from '../../database/schema';
+import { categories, productListings, priceRecords, products, stores } from '../../database/schema';
 import { CategorySpecSchemaMap, CategorySlug } from '../products/specs';
 import { BUILD_PRESETS, UsageType } from './build-presets';
 import { checkCompatibility, checkBottleneck, CompatibilityIssue } from './compatibility/rules';
@@ -11,9 +11,21 @@ const CATEGORY_ORDER: CategorySlug[] = [
   'cpu', 'gpu', 'motherboard', 'ram', 'case', 'cooler', 'psu', 'ssd',
 ];
 
+const CATEGORY_LABELS: Record<string, string> = {
+  cpu: 'CPU',
+  gpu: '그래픽카드',
+  motherboard: '메인보드',
+  ram: '메모리',
+  case: '케이스',
+  cooler: '쿨러',
+  psu: '파워',
+  ssd: 'SSD',
+};
+
 interface CandidateProduct {
   id: string;
   name: string;
+  slug: string;
   brand: string;
   imageUrl: string | null;
   specs: Record<string, unknown>;
@@ -21,6 +33,9 @@ interface CandidateProduct {
   singleThreadScore: number | null;
   price: number;
   currency: string;
+  storeUrl: string | null;
+  storeName: string | null;
+  inStock: boolean;
   valueScore: number;
 }
 
@@ -66,12 +81,17 @@ export class BuilderService {
       const pick = candidates[0];
       const part: SelectedPart = {
         category: slug,
+        categoryName: CATEGORY_LABELS[slug] ?? slug,
         productId: pick.id,
-        name: pick.name,
+        productName: pick.name,
+        slug: pick.slug,
         brand: pick.brand,
         price: pick.price,
         currency: pick.currency,
         imageUrl: pick.imageUrl,
+        storeUrl: pick.storeUrl,
+        storeName: pick.storeName,
+        inStock: pick.inStock,
         specs: pick.specs,
         performanceScore: pick.performanceScore,
       };
@@ -111,7 +131,8 @@ export class BuilderService {
     const ratio = cpuScore && gpuScore ? gpuScore / cpuScore : null;
 
     return {
-      parts: Object.values(selected),
+      budget: req.budget,
+      components: Object.values(selected),
       totalPrice,
       budgetUsed: Math.round((totalPrice / req.budget) * 100),
       currency: Object.values(selected)[0]?.currency ?? 'KRW',
@@ -134,17 +155,28 @@ export class BuilderService {
     cpuMinScore: number,
     gpuMinScore: number,
   ): Promise<CandidateProduct[]> {
-    // Latest price per product via subquery
+    // Cheapest active listing per product (with store info)
     const latestPrice = this.db
       .select({
         productId: productListings.productId,
+        listingId: productListings.id,
+        storeUrl: productListings.url,
+        storeId: productListings.storeId,
         price: sql<number>`MIN(CAST(${priceRecords.price} AS numeric))`.as('price'),
         currency: priceRecords.currency,
+        inStock: priceRecords.inStock,
       })
       .from(priceRecords)
       .innerJoin(productListings, eq(priceRecords.listingId, productListings.id))
       .where(eq(productListings.isActive, true))
-      .groupBy(productListings.productId, priceRecords.currency)
+      .groupBy(
+        productListings.productId,
+        productListings.id,
+        productListings.url,
+        productListings.storeId,
+        priceRecords.currency,
+        priceRecords.inStock,
+      )
       .as('latest_price');
 
     const conditions = [
@@ -177,6 +209,7 @@ export class BuilderService {
       .select({
         id: products.id,
         name: products.name,
+        slug: products.slug,
         brand: products.brand,
         imageUrl: products.imageUrl,
         specs: products.specs,
@@ -184,10 +217,14 @@ export class BuilderService {
         singleThreadScore: products.singleThreadScore,
         price: latestPrice.price,
         currency: latestPrice.currency,
+        storeUrl: latestPrice.storeUrl,
+        storeName: stores.name,
+        inStock: latestPrice.inStock,
       })
       .from(products)
       .innerJoin(categories, eq(products.categoryId, categories.id))
       .innerJoin(latestPrice, eq(products.id, latestPrice.productId))
+      .innerJoin(stores, eq(latestPrice.storeId, stores.id))
       .where(and(...conditions))
       .limit(20);
 
