@@ -1,6 +1,8 @@
 import {
   index,
+  integer,
   jsonb,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -9,6 +11,13 @@ import {
 } from 'drizzle-orm/pg-core';
 import { categories } from './categories';
 import { productGroups } from './product-groups';
+
+export const specExtractionStatusEnum = pgEnum('spec_extraction_status', [
+  'pending',
+  'parsed',
+  'llm',
+  'failed',
+]);
 
 export const products = pgTable(
   'products',
@@ -32,6 +41,14 @@ export const products = pgTable(
     // Flexible specs: { cores: 8, tdp: 125, socket: 'AM5' } for CPU
     //                 { vram: 16, bus: '256-bit' } for GPU, etc.
     specs: jsonb('specs').notNull().default({}),
+    // PassMark CPU Mark / G3D Mark 등 (CPU/GPU만 사용, 그 외 null)
+    performanceScore: integer('performance_score'),
+    // CPU 단일스레드 점수 (게임/사무 구분용)
+    singleThreadScore: integer('single_thread_score'),
+    specExtractionStatus: specExtractionStatusEnum('spec_extraction_status')
+      .notNull()
+      .default('pending'),
+    specUpdatedAt: timestamp('spec_updated_at', { withTimezone: true }),
     // Normalized search field: "amd ryzen 9 7950x cpu"
     searchVector: text('search_vector'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -42,6 +59,9 @@ export const products = pgTable(
     brandIdx: index('products_brand_idx').on(table.brand),
     slugIdx: index('products_slug_idx').on(table.slug),
     groupIdx: index('products_group_idx').on(table.groupId),
+    performanceScoreIdx: index('products_performance_score_idx').on(
+      table.performanceScore,
+    ),
   }),
 );
 

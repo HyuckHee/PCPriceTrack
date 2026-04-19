@@ -10,4 +10,5 @@ export * from './notifications';
 export * from './crawl-jobs';
 export * from './crawler-settings';
 export * from './pc-builds';
+export * from './benchmark-scores';
 export * from './relations';

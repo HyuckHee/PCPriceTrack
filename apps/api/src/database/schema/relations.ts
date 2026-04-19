@@ -9,6 +9,7 @@ import { users } from './users';
 import { alerts } from './alerts';
 import { notifications } from './notifications';
 import { crawlJobs } from './crawl-jobs';
+import { benchmarkScores } from './benchmark-scores';
 
 export const categoriesRelations = relations(categories, ({ many }) => ({
   products: many(products),
@@ -29,6 +30,14 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   }),
   listings: many(productListings),
   alerts: many(alerts),
+  benchmarkScores: many(benchmarkScores),
+}));
+
+export const benchmarkScoresRelations = relations(benchmarkScores, ({ one }) => ({
+  product: one(products, {
+    fields: [benchmarkScores.productId],
+    references: [products.id],
+  }),
 }));
 
 

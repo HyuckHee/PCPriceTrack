@@ -124,6 +124,8 @@ export async function fetchProducts(params: {
   minPrice: string;
   maxPrice: string;
   page: string;
+  brand?: string;
+  sortBy?: string;
 }): Promise<ProductsResponse> {
   if (IS_DEMO) {
     return getMockProductsResponse({ ...params, limit: 24 }) as unknown as ProductsResponse;
@@ -134,6 +136,8 @@ export async function fetchProducts(params: {
   if (params.categoryId) query.set('categoryId', params.categoryId);
   if (params.minPrice) query.set('minPrice', params.minPrice);
   if (params.maxPrice) query.set('maxPrice', params.maxPrice);
+  if (params.brand) query.set('brand', params.brand);
+  if (params.sortBy) query.set('sortBy', params.sortBy);
 
   return api.get<ProductsResponse>(`/products?${query}`);
 }
@@ -189,11 +193,26 @@ export interface BuildComponent {
   budgetAllocation?: number;
 }
 
+export interface BuildWarning {
+  severity: 'error' | 'warning';
+  rule: string;
+  message: string;
+}
+
+export interface BuildPerformanceSummary {
+  cpuScore: number | null;
+  gpuScore: number | null;
+  balanceRatio: number | null;
+  label: string;
+}
+
 export interface BuildEstimate {
   budget: number;
   currency: string;
   totalPrice: number;
   components: (BuildComponent | null)[];
+  warnings?: BuildWarning[];
+  performanceSummary?: BuildPerformanceSummary;
 }
 
 export interface SavedBuild {
@@ -210,8 +229,13 @@ export async function fetchBuildEstimate(
   budget: number,
   currency: string,
   ratios?: Record<string, number>,
+  usage?: string,
 ): Promise<BuildEstimate | null> {
   try {
+    // New builder endpoint when usage is provided
+    if (usage) {
+      return await api.post<BuildEstimate>('/builder/estimate', { budget, usage });
+    }
     return await api.post<BuildEstimate>('/builds/estimate', { budget, currency, ...(ratios ? { ratios } : {}) });
   } catch {
     return null;

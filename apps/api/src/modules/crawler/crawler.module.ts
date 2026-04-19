@@ -13,6 +13,9 @@ import { CrawlerScheduleService } from './services/crawler-schedule.service';
 import { InMemoryQueueService } from './services/in-memory-queue.service';
 import { BullQueueService } from './services/bull-queue.service';
 import { QUEUE_SERVICE } from './services/queue.interface';
+import { SpecExtractionService } from './services/spec-extraction.service';
+import { LlmSpecExtractorService } from './services/spec-parsers/llm-spec-extractor.service';
+import { BenchmarkMatchService } from './services/benchmark-match.service';
 
 const REDIS_MODE = (process.env.REDIS_MODE ?? 'disabled') as 'disabled' | 'local' | 'upstash';
 const logger = new Logger('CrawlerModule');
@@ -50,6 +53,9 @@ export class CrawlerModule {
       CircuitBreakerService,
       PriceIngestionService,
       CrawlerScheduleService,
+      LlmSpecExtractorService,
+      SpecExtractionService,
+      BenchmarkMatchService,
     ];
 
     if (REDIS_MODE === 'disabled') {

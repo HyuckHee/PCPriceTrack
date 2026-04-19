@@ -4,6 +4,9 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3001),
 
+  // Admin
+  ADMIN_SECRET: z.string().min(1),
+
   // Database
   DATABASE_URL: z.string().min(1),
   POSTGRES_HOST: z.string().default('localhost'),
@@ -21,8 +24,8 @@ const envSchema = z.object({
 
   // Auth
   JWT_SECRET: z.string().min(32),
-  JWT_EXPIRY: z.string().default('15m'),
-  JWT_REFRESH_EXPIRY: z.string().default('7d'),
+  JWT_EXPIRY: z.string().default('1h'),
+  JWT_REFRESH_EXPIRY: z.string().default('30d'),
 
   // Email
   RESEND_API_KEY: z.string().optional(),
@@ -43,6 +46,9 @@ const envSchema = z.object({
   // Naver Shopping API
   NAVER_CLIENT_ID: z.string().optional(),
   NAVER_CLIENT_SECRET: z.string().optional(),
+
+  // LLM Spec Extraction (optional — falls back to parse-only mode)
+  ANTHROPIC_API_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

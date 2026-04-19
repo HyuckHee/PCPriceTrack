@@ -6,6 +6,8 @@ import { productGroups } from '../../database/schema/product-groups';
 import { AdapterFactory } from './adapters/adapter.factory';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { PriceIngestionService } from './services/price-ingestion.service';
+import { SpecExtractionService } from './services/spec-extraction.service';
+import { BenchmarkMatchService } from './services/benchmark-match.service';
 import { Job } from './services/in-memory-queue.service';
 import { QUEUE_SERVICE, IQueueService } from './services/queue.interface';
 import { CRAWL_JOB_TYPES } from './constants';
@@ -21,6 +23,8 @@ export class CrawlerProcessor implements OnModuleInit, OnModuleDestroy {
     private readonly adapterFactory: AdapterFactory,
     private readonly circuitBreaker: CircuitBreakerService,
     private readonly priceIngestion: PriceIngestionService,
+    private readonly specExtraction: SpecExtractionService,
+    private readonly benchmarkMatch: BenchmarkMatchService,
     @Inject(QUEUE_SERVICE) private readonly queue: IQueueService,
   ) {}
 
@@ -276,6 +280,26 @@ export class CrawlerProcessor implements OnModuleInit, OnModuleDestroy {
 
           if (inserted.length > 0) {
             productId = inserted[0].id;
+            // 신규 제품에 한해 스펙 추출 비동기 실행 (실패해도 ingestion 흐름 유지)
+            this.specExtraction
+              .extractAndSave({
+                productId,
+                storeName: this.adapterFactory.getAdapter(storeId)?.storeName ?? '',
+                categorySlug,
+                raw: {
+                  productName: result.productName,
+                  specTable: (result as unknown as Record<string, unknown>).specTable as Record<string, string> | undefined,
+                  description: (result as unknown as Record<string, unknown>).description as string | undefined,
+                },
+              })
+              .catch((err: Error) =>
+                this.logger.error(`SpecExtraction 실패: product=${productId} ${err.message}`),
+              );
+            this.benchmarkMatch
+              .matchAndSave(productId, result.productName ?? '', categorySlug)
+              .catch((err: Error) =>
+                this.logger.error(`BenchmarkMatch 실패: product=${productId} ${err.message}`),
+              );
           } else {
             const [existing] = await this.db
               .select({ id: products.id })

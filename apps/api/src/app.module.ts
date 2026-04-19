@@ -11,6 +11,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ProductsModule } from './modules/products/products.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { BuildsModule } from './modules/builds/builds.module';
+import { BuilderModule } from './modules/builder/builder.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { HealthController } from './health.controller';
 
@@ -45,6 +46,7 @@ import { HealthController } from './health.controller';
     ProductsModule,
     AlertsModule,
     BuildsModule,
+    BuilderModule,
     CrawlerModule.register(),
   ],
   controllers: [HealthController],

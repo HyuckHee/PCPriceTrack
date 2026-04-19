@@ -9,6 +9,7 @@ import { useCurrency } from '@/context/CurrencyContext';
 import {
   BuildComponent,
   BuildEstimate,
+  BuildWarning,
   fetchBuildEstimate,
   fetchBuildAlternatives,
   saveBuild,
@@ -17,32 +18,11 @@ import { convertPrice, formatPrice } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { DRAG_TYPE, type DragProductPayload } from '@/lib/drag-utils';
+import { DRAG_TYPE, type DragProductPayload, CATEGORY_ICONS, CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/drag-utils';
 
-const CATEGORY_ORDER = ['gpu', 'cpu', 'motherboard', 'ram', 'psu', 'ssd', 'cooler'];
-const CATEGORY_ICONS: Record<string, string> = {
-  gpu: '🎮',
-  cpu: '⚡',
-  ram: '💾',
-  ssd: '💿',
-  motherboard: '🖥️',
-  psu: '🔌',
-  cooler: '❄️',
-};
-const CATEGORY_LABELS: Record<string, string> = {
-  gpu: '그래픽카드',
-  cpu: 'CPU',
-  ram: '메모리',
-  ssd: 'SSD/HDD',
-  motherboard: '메인보드',
-  psu: '파워',
-  cooler: '쿨러',
-};
 const DEFAULT_RATIO: Record<string, number> = {
   gpu: 0.35, cpu: 0.20, motherboard: 0.15, ram: 0.10, psu: 0.08, ssd: 0.08, cooler: 0.04,
 };
-// alias used inside component logic
-const BUDGET_RATIO = DEFAULT_RATIO;
 
 const RATIO_LS_KEY = 'build_ratios_v1';
 
@@ -146,6 +126,18 @@ export default function BuildEstimatorPanel() {
     };
   }, []);
 
+  // 용도 선택
+  const [usage, setUsage] = useState<string>('gaming-fhd');
+
+  const USAGE_OPTIONS = [
+    { value: 'office',          label: '사무/웹' },
+    { value: 'gaming-fhd',      label: '게이밍 FHD' },
+    { value: 'gaming-qhd',      label: '게이밍 QHD' },
+    { value: 'gaming-4k',       label: '게이밍 4K' },
+    { value: 'video-editing',   label: '영상편집' },
+    { value: 'ai-workstation',  label: 'AI/3D' },
+  ];
+
   // Form state
   const [budget, setBudget] = useState<number>(1000);
   const [inputValue, setInputValue] = useState<string>('1000');
@@ -246,8 +238,7 @@ export default function BuildEstimatorPanel() {
     setEstimate(null);
     setSwapTarget(null);
     setSwapAlts({});
-    // 기본값과 다를 때만 ratios 전달
-    const result = await fetchBuildEstimate(budget, currency, isDefaultRatio ? undefined : ratios);
+    const result = await fetchBuildEstimate(budget, currency, isDefaultRatio ? undefined : ratios, usage);
     setEstimate(result);
     setLoading(false);
   }
@@ -290,7 +281,7 @@ export default function BuildEstimatorPanel() {
     if (swapAlts[cat]) return; // already cached
 
     setLoadingSwap((prev) => ({ ...prev, [cat]: true }));
-    const allocation = estimate ? estimate.budget * (BUDGET_RATIO[cat] ?? 0.10) : 0;
+    const allocation = estimate ? estimate.budget * (DEFAULT_RATIO[cat] ?? 0.10) : 0;
     const alts = await fetchBuildAlternatives(
       cat,
       allocation,
@@ -455,6 +446,26 @@ export default function BuildEstimatorPanel() {
 
           <TabsContent value="estimate" className="mt-0 flex-1">
         <div className="p-4 space-y-3">
+            {/* 용도 선택 */}
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">용도</label>
+              <div className="flex flex-wrap gap-1.5">
+                {USAGE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => { setUsage(opt.value); setEstimate(null); }}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                      usage === opt.value
+                        ? 'bg-blue-600 border-blue-500 text-white'
+                        : 'border-gray-600 text-gray-400 hover:border-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Budget input */}
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1.5">
@@ -570,6 +581,62 @@ export default function BuildEstimatorPanel() {
             {/* Results */}
             {estimate && (
               <div className="space-y-2">
+                {/* 성능 요약 */}
+                {estimate.performanceSummary && (estimate.performanceSummary.cpuScore || estimate.performanceSummary.gpuScore) && (
+                  <div className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 space-y-2">
+                    <p className="text-xs font-semibold text-gray-300">성능 요약</p>
+                    {estimate.performanceSummary.cpuScore && (
+                      <div className="space-y-0.5">
+                        <div className="flex justify-between text-xs text-gray-400">
+                          <span>CPU</span>
+                          <span className="font-mono">{estimate.performanceSummary.cpuScore.toLocaleString()}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-500 rounded-full"
+                            style={{ width: `${Math.min(100, (estimate.performanceSummary.cpuScore / 72000) * 100).toFixed(1)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {estimate.performanceSummary.gpuScore && (
+                      <div className="space-y-0.5">
+                        <div className="flex justify-between text-xs text-gray-400">
+                          <span>GPU</span>
+                          <span className="font-mono">{estimate.performanceSummary.gpuScore.toLocaleString()}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-purple-500 rounded-full"
+                            style={{ width: `${Math.min(100, (estimate.performanceSummary.gpuScore / 56000) * 100).toFixed(1)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {estimate.performanceSummary.balanceRatio !== null && (
+                      <p className="text-xs text-gray-500">
+                        균형 비율: <span className="text-gray-300 font-mono">{estimate.performanceSummary.balanceRatio}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* 호환성 경고 */}
+                {(estimate.warnings?.length ?? 0) > 0 && (
+                  <div className="rounded-lg border border-yellow-700/50 bg-yellow-900/10 px-3 py-2 space-y-1">
+                    {estimate.warnings!.map((w: BuildWarning, i: number) => (
+                      <div key={i} className="flex gap-1.5 text-xs">
+                        <span className={w.severity === 'error' ? 'text-red-400' : 'text-yellow-400'}>
+                          {w.severity === 'error' ? '✕' : '⚠'}
+                        </span>
+                        <span className={w.severity === 'error' ? 'text-red-300' : 'text-yellow-300'}>
+                          {w.message}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {components.map((comp, i) => {
                   const cat = CATEGORY_ORDER[i];
                   return (
