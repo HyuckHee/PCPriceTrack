@@ -289,7 +289,7 @@ export default function BuildEstimatorPanel() {
     try {
       const validComponents = (estimate.components.filter(Boolean) as BuildComponent[]).map(
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        ({ performanceScore: _ps, ...rest }) => rest as Omit<BuildComponent, 'performanceScore'>,
+        ({ performanceScore: _ps, specs: _sp, ...rest }: BuildComponent & { specs?: unknown }) => rest,
       );
       const result = await saveBuild(buildName, estimate.budget, estimate.currency, estimate.totalPrice, validComponents);
       if (result) {
