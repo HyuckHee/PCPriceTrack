@@ -191,6 +191,7 @@ export interface BuildComponent {
   storeName: string | null;
   inStock: boolean;
   budgetAllocation?: number;
+  performanceScore?: number | null;
 }
 
 export interface BuildWarning {

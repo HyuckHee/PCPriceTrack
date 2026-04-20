@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { toast } from 'sonner';
 import { useBuildEstimator } from '@/context/BuildEstimatorContext';
@@ -23,6 +23,37 @@ import { DRAG_TYPE, type DragProductPayload, CATEGORY_ICONS, CATEGORY_LABELS, CA
 const DEFAULT_RATIO: Record<string, number> = {
   gpu: 0.35, cpu: 0.20, motherboard: 0.15, ram: 0.10, psu: 0.08, ssd: 0.08, cooler: 0.04,
 };
+
+// ── 병목 분석 ──────────────────────────────────────────────────────────────────
+const PIXEL_FACTOR: Record<string, number> = { '1080p': 1.00, '1440p': 1.78, '4K': 4.00 };
+const CPU_USAGE_MULTIPLIER: Record<string, number> = {
+  'office': 1.5, 'gaming-fhd': 1.0, 'gaming-qhd': 1.0,
+  'gaming-4k': 0.8, 'video-editing': 1.3, 'ai-workstation': 1.4,
+};
+
+interface BottleneckRow {
+  resolution: string;
+  bottleneckPct: number;
+  limiter: 'CPU' | 'GPU' | 'none';
+}
+
+function calcBottleneck(
+  components: (BuildComponent | null)[],
+  usage: string,
+): BottleneckRow[] | null {
+  const cpuScore = components.find(c => c?.category === 'cpu')?.performanceScore ?? null;
+  const gpuScore = components.find(c => c?.category === 'gpu')?.performanceScore ?? null;
+  if (!cpuScore || !gpuScore) return null;
+  const cpuMul = CPU_USAGE_MULTIPLIER[usage] ?? 1.0;
+  return ['1080p', '1440p', '4K'].map(res => {
+    const gpuEff = gpuScore / PIXEL_FACTOR[res];
+    const cpuEff = cpuScore * cpuMul;
+    const ratio = gpuEff / cpuEff;
+    const pct = Math.round(Math.abs(1 - ratio) * 1000) / 10;
+    const limiter: BottleneckRow['limiter'] = pct < 10 ? 'none' : ratio < 1 ? 'GPU' : 'CPU';
+    return { resolution: res, bottleneckPct: pct, limiter };
+  });
+}
 
 const RATIO_LS_KEY = 'build_ratios_v1';
 
@@ -189,6 +220,10 @@ export default function BuildEstimatorPanel() {
     setRatios({ ...DEFAULT_RATIO });
   }
 
+  // 병목 분석 상세 토글
+  const [showBottleneckDetail, setShowBottleneckDetail] = useState(false);
+  const [bottleneckDetailTab, setBottleneckDetailTab] = useState<'1080p' | '1440p' | '4K'>('1080p');
+
   // Swap state
   const [swapTarget, setSwapTarget] = useState<string | null>(null);
   const [swapAlts, setSwapAlts] = useState<Record<string, BuildComponent[]>>({});
@@ -252,7 +287,10 @@ export default function BuildEstimatorPanel() {
     }
     setSaving(true);
     try {
-      const validComponents = estimate.components.filter(Boolean) as BuildComponent[];
+      const validComponents = (estimate.components.filter(Boolean) as BuildComponent[]).map(
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        ({ performanceScore: _ps, ...rest }) => rest,
+      );
       const result = await saveBuild(buildName, estimate.budget, estimate.currency, estimate.totalPrice, validComponents);
       if (result) {
         toast.success('견적이 저장되었습니다!');
@@ -372,6 +410,8 @@ export default function BuildEstimatorPanel() {
     estimate && Array.isArray(estimate.components)
       ? CATEGORY_ORDER.map((cat) => estimate.components.find((c) => c?.category === cat) ?? null)
       : [];
+
+  const bottleneckAnalysis = useMemo(() => calcBottleneck(components, usage), [components, usage]);
 
   const displayTotal =
     estimate && estimate.totalPrice > 0
@@ -582,43 +622,95 @@ export default function BuildEstimatorPanel() {
             {/* Results */}
             {estimate && (
               <div className="space-y-2">
-                {/* 성능 요약 */}
-                {estimate.performanceSummary && (estimate.performanceSummary.cpuScore || estimate.performanceSummary.gpuScore) && (
-                  <div className="rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 space-y-2">
-                    <p className="text-xs font-semibold text-gray-300">성능 요약</p>
-                    {estimate.performanceSummary.cpuScore && (
-                      <div className="space-y-0.5">
-                        <div className="flex justify-between text-xs text-gray-400">
-                          <span>CPU</span>
-                          <span className="font-mono">{estimate.performanceSummary.cpuScore.toLocaleString()}</span>
-                        </div>
-                        <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-blue-500 rounded-full"
-                            style={{ width: `${Math.min(100, (estimate.performanceSummary.cpuScore / 72000) * 100).toFixed(1)}%` }}
-                          />
-                        </div>
+                {/* 병목 분석 */}
+                {bottleneckAnalysis && (
+                  <div className="rounded-lg bg-gray-800 border border-gray-700 overflow-hidden">
+                    {/* 요약 행 */}
+                    <div className="px-3 py-2 space-y-1">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-xs font-semibold text-gray-300">🔍 병목 분석</p>
+                        <button
+                          onClick={() => setShowBottleneckDetail(v => !v)}
+                          className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          {showBottleneckDetail ? '접기 ▲' : '상세 보기 ▼'}
+                        </button>
                       </div>
-                    )}
-                    {estimate.performanceSummary.gpuScore && (
-                      <div className="space-y-0.5">
-                        <div className="flex justify-between text-xs text-gray-400">
-                          <span>GPU</span>
-                          <span className="font-mono">{estimate.performanceSummary.gpuScore.toLocaleString()}</span>
+                      {bottleneckAnalysis.map(row => (
+                        <div key={row.resolution} className="flex items-center gap-2 text-xs">
+                          <span className="w-12 text-gray-400 font-mono text-[10px]">{row.resolution}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                            row.limiter === 'none'
+                              ? 'bg-green-900/50 text-green-400'
+                              : row.limiter === 'CPU'
+                              ? 'bg-orange-900/50 text-orange-400'
+                              : 'bg-purple-900/50 text-purple-400'
+                          }`}>
+                            {row.limiter === 'none' ? '✅ 균형' : row.limiter === 'CPU' ? '⚠ CPU' : '⚠ GPU'}
+                          </span>
+                          <span className="text-gray-400 font-mono">{row.bottleneckPct.toFixed(1)}%</span>
                         </div>
-                        <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-purple-500 rounded-full"
-                            style={{ width: `${Math.min(100, (estimate.performanceSummary.gpuScore / 56000) * 100).toFixed(1)}%` }}
-                          />
+                      ))}
+                    </div>
+
+                    {/* 상세 뷰 */}
+                    {showBottleneckDetail && (() => {
+                      const cpuScore = components.find(c => c?.category === 'cpu')?.performanceScore ?? 0;
+                      const gpuScore = components.find(c => c?.category === 'gpu')?.performanceScore ?? 0;
+                      const row = bottleneckAnalysis.find(r => r.resolution === bottleneckDetailTab)!;
+                      const cpuMul = CPU_USAGE_MULTIPLIER[usage] ?? 1.0;
+                      const gpuEff = gpuScore / PIXEL_FACTOR[bottleneckDetailTab];
+                      const cpuEff = cpuScore * cpuMul;
+                      const maxEff = Math.max(gpuEff, cpuEff, 1);
+                      const tip =
+                        row.limiter === 'none' ? '최적 균형입니다. 현 구성이 이 해상도에 잘 맞습니다.' :
+                        row.limiter === 'CPU' ? `CPU가 GPU를 따라가지 못합니다. 해상도를 높이거나 CPU를 업그레이드하세요.` :
+                        `GPU가 CPU를 따라가지 못합니다. GPU를 업그레이드하거나 해상도를 낮추세요.`;
+                      return (
+                        <div className="border-t border-gray-700 px-3 py-2.5 space-y-2.5">
+                          {/* 해상도 탭 */}
+                          <div className="flex gap-1">
+                            {(['1080p', '1440p', '4K'] as const).map(res => (
+                              <button
+                                key={res}
+                                onClick={() => setBottleneckDetailTab(res)}
+                                className={`flex-1 py-0.5 text-[10px] rounded font-medium transition-colors ${
+                                  bottleneckDetailTab === res
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                                }`}
+                              >
+                                {res}
+                              </button>
+                            ))}
+                          </div>
+                          {/* 바 차트 */}
+                          <div className="space-y-1.5">
+                            <div className="space-y-0.5">
+                              <div className="flex justify-between text-[10px]">
+                                <span className="text-blue-400 font-medium">CPU 처리량</span>
+                                <span className="text-gray-400 font-mono">{Math.round(cpuEff).toLocaleString()}</span>
+                              </div>
+                              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                                  style={{ width: `${Math.min(100, (cpuEff / maxEff) * 100).toFixed(1)}%` }} />
+                              </div>
+                            </div>
+                            <div className="space-y-0.5">
+                              <div className="flex justify-between text-[10px]">
+                                <span className="text-purple-400 font-medium">GPU 처리량</span>
+                                <span className="text-gray-400 font-mono">{Math.round(gpuEff).toLocaleString()}</span>
+                              </div>
+                              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div className="h-full bg-purple-500 rounded-full transition-all duration-300"
+                                  style={{ width: `${Math.min(100, (gpuEff / maxEff) * 100).toFixed(1)}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-gray-400 leading-relaxed">{tip}</p>
                         </div>
-                      </div>
-                    )}
-                    {estimate.performanceSummary.balanceRatio !== null && (
-                      <p className="text-xs text-gray-500">
-                        균형 비율: <span className="text-gray-300 font-mono">{estimate.performanceSummary.balanceRatio}</span>
-                      </p>
-                    )}
+                      );
+                    })()}
                   </div>
                 )}
 
