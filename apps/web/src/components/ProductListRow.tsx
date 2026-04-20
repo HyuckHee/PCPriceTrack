@@ -25,6 +25,7 @@ interface Product {
   previousMinPrice: string | null;
   storeCount: number | null;
   storeNames: string | null;
+  performanceScore?: number | null;
   category: { id: string; name: string };
 }
 
@@ -48,6 +49,7 @@ export function ProductListRow({ p }: { p: Product }) {
       brand: p.brand,
       slug: p.slug,
       storeNames: p.storeNames,
+      performanceScore: p.performanceScore ?? null,
     };
     e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(payload));
     e.dataTransfer.effectAllowed = 'copy';

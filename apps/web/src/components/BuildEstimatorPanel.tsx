@@ -289,7 +289,7 @@ export default function BuildEstimatorPanel() {
     try {
       const validComponents = (estimate.components.filter(Boolean) as BuildComponent[]).map(
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        ({ performanceScore: _ps, ...rest }) => rest,
+        ({ performanceScore: _ps, ...rest }) => rest as Omit<BuildComponent, 'performanceScore'>,
       );
       const result = await saveBuild(buildName, estimate.budget, estimate.currency, estimate.totalPrice, validComponents);
       if (result) {
@@ -383,6 +383,7 @@ export default function BuildEstimatorPanel() {
         storeUrl: null,
         storeName: payload.storeNames?.split(', ')[0] ?? null,
         inStock: true,
+        performanceScore: payload.performanceScore ?? null,
       };
       const newComponents = estimate.components.map((c) =>
         c?.category === cat ? { ...newComp, budgetAllocation: c?.budgetAllocation } : c,
@@ -754,6 +755,11 @@ export default function BuildEstimatorPanel() {
                           {comp && !isDragging && (
                             <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${comp.inStock ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
                               {comp.inStock ? '재고있음' : '품절'}
+                            </span>
+                          )}
+                          {comp?.quantity && comp.quantity > 1 && !isDragging && (
+                            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-blue-900/50 text-blue-400">
+                              ×{comp.quantity}
                             </span>
                           )}
                           {isDragOverPanel && draggingCategory.current === cat ? (

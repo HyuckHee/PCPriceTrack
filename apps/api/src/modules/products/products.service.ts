@@ -133,6 +133,7 @@ export class ProductsService {
       SELECT
         p.id, p.group_id AS "groupId", p.name, p.brand, p.model, p.slug,
         p.image_url AS "imageUrl", p.specs, p.created_at AS "createdAt",
+        p.performance_score AS "performanceScore",
         c.id AS "cat_id", c.name AS "cat_name", c.slug AS "cat_slug",
         pg.id AS "grp_id", pg.name AS "grp_name", pg.slug AS "grp_slug",
         gp.min_price AS "minPrice", gp.max_price AS "maxPrice",
@@ -199,6 +200,7 @@ export class ProductsService {
         previousMinPrice: r['previousMinPrice'] != null ? String(r['previousMinPrice']) : null,
         storeCount: r['storeCount'] != null ? Number(r['storeCount']) : null,
         storeNames: r['storeNames'] as string | null,
+        performanceScore: r['performanceScore'] != null ? Number(r['performanceScore']) : null,
       }));
 
       const total = Number((countResult.rows[0] as Record<string, unknown>).count ?? 0);

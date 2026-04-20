@@ -56,8 +56,10 @@ export class BuilderService {
       if (!allocation) continue;
 
       const [minPct, maxPct] = allocation;
-      const minBudget = Math.floor(req.budget * minPct);
-      const maxBudget = Math.floor(req.budget * maxPct);
+      // RAM은 2개 구성이 기본이므로 단가 기준으로 탐색
+      const qty = slug === 'ram' ? 2 : 1;
+      const minBudget = Math.floor(req.budget * minPct / qty);
+      const maxBudget = Math.floor(req.budget * maxPct / qty);
 
       // Office: skip GPU unless budget > 500k
       if (slug === 'gpu' && req.usage === 'office' && req.budget < 500000) continue;
@@ -86,7 +88,7 @@ export class BuilderService {
         productName: pick.name,
         slug: pick.slug,
         brand: pick.brand,
-        price: pick.price,
+        price: pick.price * qty,
         currency: pick.currency,
         imageUrl: pick.imageUrl,
         storeUrl: pick.storeUrl,
@@ -94,9 +96,10 @@ export class BuilderService {
         inStock: pick.inStock,
         specs: pick.specs,
         performanceScore: pick.performanceScore,
+        ...(qty > 1 ? { quantity: qty } : {}),
       };
       selected[slug] = part;
-      remainingBudget -= pick.price;
+      remainingBudget -= pick.price * qty;
     }
 
     // ── Compatibility check ─────────────────────────────────────────────────

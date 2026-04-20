@@ -192,6 +192,7 @@ export interface BuildComponent {
   inStock: boolean;
   budgetAllocation?: number;
   performanceScore?: number | null;
+  quantity?: number;
 }
 
 export interface BuildWarning {

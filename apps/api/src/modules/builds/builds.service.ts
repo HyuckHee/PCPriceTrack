@@ -225,6 +225,7 @@ export class BuildsService {
         p.slug,
         p.brand,
         p.image_url     AS "imageUrl",
+        p.performance_score AS "performanceScore",
         b.store_url     AS "storeUrl",
         b.store_name    AS "storeName",
         b.price,
@@ -253,6 +254,7 @@ export class BuildsService {
       storeUrl: row.storeUrl ? String(row.storeUrl) : null,
       storeName: row.storeName ? String(row.storeName) : null,
       inStock: Boolean(row.inStock),
+      performanceScore: row.performanceScore != null ? Number(row.performanceScore) : null,
     }));
   }
 

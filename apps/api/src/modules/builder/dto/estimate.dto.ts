@@ -34,6 +34,7 @@ export interface SelectedPart {
   inStock: boolean;
   specs: Record<string, unknown>;
   performanceScore?: number | null;
+  quantity?: number;
 }
 
 export interface EstimateResponseDto {

@@ -60,6 +60,10 @@ export class BuildComponentDto {
   @IsOptional()
   @IsNumber()
   originalPrice?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  quantity?: number;
 }
 
 export class SaveBuildDto {

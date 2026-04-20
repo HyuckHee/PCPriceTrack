@@ -53,6 +53,7 @@ export interface DragProductPayload {
   brand: string;
   slug: string;
   storeNames: string | null;
+  performanceScore?: number | null;
 }
 
 /** 드래그 시 커스텀 ghost 이미지를 생성하고 등록합니다 */
