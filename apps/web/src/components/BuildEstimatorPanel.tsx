@@ -56,6 +56,16 @@ function calcBottleneck(
 }
 
 const RATIO_LS_KEY = 'build_ratios_v1';
+const USAGE_LS_KEY = 'build_usage_v1';
+
+const USAGE_PRESET_RATIOS: Record<string, Record<string, number>> = {
+  'office':          { gpu: 0.05, cpu: 0.30, motherboard: 0.16, ram: 0.16, ssd: 0.16, cooler: 0.06, psu: 0.11 },
+  'gaming-fhd':      { gpu: 0.36, cpu: 0.18, motherboard: 0.12, ram: 0.11, ssd: 0.09, cooler: 0.06, psu: 0.08 },
+  'gaming-qhd':      { gpu: 0.40, cpu: 0.15, motherboard: 0.12, ram: 0.10, ssd: 0.09, cooler: 0.06, psu: 0.08 },
+  'gaming-4k':       { gpu: 0.47, cpu: 0.13, motherboard: 0.10, ram: 0.09, ssd: 0.08, cooler: 0.05, psu: 0.08 },
+  'video-editing':   { gpu: 0.21, cpu: 0.27, motherboard: 0.11, ram: 0.16, ssd: 0.11, cooler: 0.06, psu: 0.08 },
+  'ai-workstation':  { gpu: 0.38, cpu: 0.16, motherboard: 0.11, ram: 0.14, ssd: 0.09, cooler: 0.06, psu: 0.06 },
+};
 
 const USD_PRESETS = [500, 800, 1000, 1500, 2000];
 const KRW_PRESETS = [700000, 1000000, 1500000, 2000000, 3000000];
@@ -160,13 +170,20 @@ export default function BuildEstimatorPanel() {
   // 용도 선택
   const [usage, setUsage] = useState<string>('gaming-fhd');
 
+  function selectUsage(value: string) {
+    setUsage(value);
+    const preset = USAGE_PRESET_RATIOS[value];
+    if (preset) setRatios({ ...preset });
+    if (typeof window !== 'undefined') localStorage.setItem(USAGE_LS_KEY, value);
+  }
+
   const USAGE_OPTIONS = [
-    { value: 'office',          label: '사무/웹' },
-    { value: 'gaming-fhd',      label: '게이밍 FHD' },
-    { value: 'gaming-qhd',      label: '게이밍 QHD' },
-    { value: 'gaming-4k',       label: '게이밍 4K' },
-    { value: 'video-editing',   label: '영상편집' },
-    { value: 'ai-workstation',  label: 'AI/3D' },
+    { value: 'office',          label: '사무/웹',    desc: '문서 작업·웹서핑 위주. CPU 중심으로 예산을 배분하며, 저예산 시 GPU를 생략해 비용을 절감합니다.' },
+    { value: 'gaming-fhd',      label: '게이밍 FHD', desc: '1080p 게이밍. CPU·GPU를 균형 있게 선택하며, GPU에 예산의 약 28~42%를 배정합니다.' },
+    { value: 'gaming-qhd',      label: '게이밍 QHD', desc: '1440p 게이밍. FHD 대비 GPU 비중이 높아지고(32~46%), 최소 GPU 성능 기준도 올라갑니다.' },
+    { value: 'gaming-4k',       label: '게이밍 4K',  desc: '4K 게이밍. GPU에 예산의 최대 52%를 집중하며, 최상위 GPU 성능 기준을 적용합니다.' },
+    { value: 'video-editing',   label: '영상편집',   desc: '영상 렌더링·편집 특화. CPU 기준이 가장 높고 RAM·SSD 비중도 커서, 대용량 파일 처리에 최적화합니다.' },
+    { value: 'ai-workstation',  label: 'AI/3D',     desc: 'AI 추론·3D 렌더링 워크스테이션. GPU(최대 48%)와 RAM(최대 20%) 비중을 모두 높여 연산·메모리 병목을 방지합니다.' },
   ];
 
   // Form state
@@ -182,13 +199,25 @@ export default function BuildEstimatorPanel() {
   >([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
 
-  // 비율 설정 — 초기값은 항상 DEFAULT_RATIO, 마운트 후 localStorage에서 덮어씀
-  const [ratios, setRatios] = useState<Record<string, number>>({ ...DEFAULT_RATIO });
+  // 비율 설정 — 초기값은 gaming-fhd 프리셋, 마운트 후 localStorage에서 덮어씀
+  const [ratios, setRatios] = useState<Record<string, number>>({ ...USAGE_PRESET_RATIOS['gaming-fhd'] });
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(RATIO_LS_KEY);
-      if (saved) setRatios(JSON.parse(saved) as Record<string, number>);
+      // null = 미방문(키 없음), '' = 사용자가 명시적으로 용도 해제, '...' = 저장된 용도
+      const savedUsage = localStorage.getItem(USAGE_LS_KEY);
+      const savedRatios = localStorage.getItem(RATIO_LS_KEY);
+      if (savedUsage === null) {
+        // 첫 방문: 기본 usage(gaming-fhd) 프리셋 적용, 저장된 비율 무시
+        setRatios({ ...USAGE_PRESET_RATIOS['gaming-fhd'] });
+      } else if (savedUsage) {
+        // 저장된 용도 복원 → 프리셋 비율 적용
+        setUsage(savedUsage);
+        if (USAGE_PRESET_RATIOS[savedUsage]) setRatios({ ...USAGE_PRESET_RATIOS[savedUsage] });
+      } else if (savedRatios) {
+        // usage='' (커스텀 모드): 저장된 비율 복원
+        setRatios(JSON.parse(savedRatios) as Record<string, number>);
+      }
     } catch { /* ignore */ }
   }, []);
   const [showRatioEditor, setShowRatioEditor] = useState(false);
@@ -210,10 +239,14 @@ export default function BuildEstimatorPanel() {
   const isDefaultRatio = CATEGORY_ORDER.every(
     (cat) => Math.abs((ratios[cat] ?? 0) - DEFAULT_RATIO[cat]) < 0.001,
   );
-
   function handleRatioChange(cat: string, pct: number) {
     const clamped = Math.max(0, Math.min(100, pct));
     setRatios((prev) => ({ ...prev, [cat]: Math.round(clamped) / 100 }));
+    // 수동 수정 시 용도 선택 해제
+    if (usage) {
+      setUsage('');
+      if (typeof window !== 'undefined') localStorage.setItem(USAGE_LS_KEY, '');
+    }
   }
 
   function resetRatios() {
@@ -490,12 +523,28 @@ export default function BuildEstimatorPanel() {
         <div className="p-4 space-y-3">
             {/* 용도 선택 */}
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">용도</label>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <label className="text-xs font-medium text-gray-400">용도</label>
+                <div className="relative group">
+                  <span className="flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-500 text-gray-500 text-[9px] font-bold cursor-default select-none leading-none hover:border-gray-300 hover:text-gray-300 transition-colors">i</span>
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 bg-gray-800 border border-gray-600 rounded-lg p-3 text-xs text-gray-300 shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+                    <p className="font-semibold text-white mb-2">용도별 자동 최적화</p>
+                    <p className="text-gray-400 mb-2">용도를 선택하면 각 부품의 <span className="text-gray-200">예산 비율·최소 성능 기준·병목 감지 범위</span>가 자동으로 조정됩니다.</p>
+                    <ul className="space-y-1 text-gray-400">
+                      {USAGE_OPTIONS.map((opt) => (
+                        <li key={opt.value}>
+                          <span className="text-gray-200 font-medium">{opt.label}</span> — {opt.desc}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {USAGE_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
-                    onClick={() => { setUsage(opt.value); setEstimate(null); }}
+                    onClick={() => { selectUsage(opt.value); setEstimate(null); }}
                     className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                       usage === opt.value
                         ? 'bg-blue-600 border-blue-500 text-white'
@@ -543,7 +592,11 @@ export default function BuildEstimatorPanel() {
               >
                 <span className="flex items-center gap-1.5">
                   ⚙️ <span className="font-medium">예산 비율 설정</span>
-                  {!isDefaultRatio && (
+                  {usage ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900/60 text-blue-300 border border-blue-700/50">
+                      {USAGE_OPTIONS.find(o => o.value === usage)?.label ?? usage}
+                    </span>
+                  ) : !isDefaultRatio && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-900/60 text-indigo-300 border border-indigo-700/50">
                       커스텀
                     </span>
@@ -587,7 +640,7 @@ export default function BuildEstimatorPanel() {
                     <span className={`text-xs font-mono font-semibold ${ratioTotal === 100 ? 'text-green-400' : 'text-red-400'}`}>
                       {ratioTotal === 100 ? '✓ 합계 100%' : `⚠ 합계 ${ratioTotal}% — 100%가 되어야 합니다`}
                     </span>
-                    {!isDefaultRatio && (
+                    {(!usage && !isDefaultRatio) && (
                       <button
                         onClick={resetRatios}
                         className="text-xs px-2.5 py-1 rounded-md border border-gray-600 text-gray-400 hover:text-white hover:border-gray-400 transition-colors"
