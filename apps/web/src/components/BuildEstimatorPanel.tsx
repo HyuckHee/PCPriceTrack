@@ -544,7 +544,7 @@ export default function BuildEstimatorPanel() {
                 {USAGE_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
-                    onClick={() => { selectUsage(opt.value); setEstimate(null); }}
+                    onClick={() => { selectUsage(opt.value); }}
                     className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                       usage === opt.value
                         ? 'bg-blue-600 border-blue-500 text-white'
