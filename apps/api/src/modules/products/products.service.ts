@@ -10,10 +10,22 @@ import { priceRecords } from '../../database/schema/price-records';
 import { stores } from '../../database/schema/stores';
 import { ListProductsDto } from './dto/list-products.dto';
 
-/** 스펙 필터에 허용되는 키 목록 — SQL injection 방지 */
+/** 스펙 필터에 허용되는 키 목록 — SQL injection 방지 (실제 스키마 키 기준) */
 const ALLOWED_SPEC_KEYS = new Set([
-  'cores', 'threads', 'socket', 'generation', 'vram', 'chipset',
-  'bus_width', 'capacity', 'ddr', 'speed', 'wattage', 'efficiency', 'type',
+  // CPU
+  'socket', 'cores', 'threads', 'tdp', 'baseClockGhz', 'boostClockGhz', 'integratedGraphics', 'supportedRam',
+  // GPU
+  'vramGb', 'chipset', 'lengthMm', 'widthSlots', 'pcieInterface', 'powerConnectors', 'recommendedPsuWattage',
+  // RAM
+  'type', 'capacityGb', 'speedMhz', 'modules', 'moduleCapacityGb', 'casLatency', 'eccSupport',
+  // PSU
+  'wattage', 'formFactor', 'modularity', 'efficiency',
+  // 쿨러
+  'coolerType', 'tdpRating', 'heightMm', 'radiatorSize', 'fanCount',
+  // 저장장치
+  'storageType', 'interface', 'readMbps', 'writeMbps', 'rpm', 'dramCache',
+  // 마더보드
+  'ramType', 'ramSlots', 'maxRamGb', 'maxRamSpeedMhz', 'm2Slots', 'sataPorts', 'pcieX16Slots',
 ]);
 
 /** 통화별 적정 가격 범위 — 이 범위를 벗어나면 크롤링 오염 데이터로 간주 */

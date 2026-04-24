@@ -1,9 +1,22 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Pool } from 'pg';
 
-/** 숫자형 스펙 키 — min/max range 타입으로 반환 */
+/** 숫자형 스펙 키 — min/max range 타입으로 반환 (실제 스키마 키 기준) */
 const NUMERIC_SPEC_KEYS = new Set([
-  'cores', 'threads', 'vram', 'capacity', 'speed', 'wattage', 'bus_width',
+  // CPU
+  'cores', 'threads', 'tdp', 'baseClockGhz', 'boostClockGhz',
+  // GPU
+  'vramGb', 'lengthMm', 'widthSlots', 'recommendedPsuWattage',
+  // RAM
+  'capacityGb', 'speedMhz', 'modules', 'moduleCapacityGb', 'casLatency',
+  // PSU
+  'wattage',
+  // 쿨러
+  'tdpRating', 'heightMm', 'fanCount',
+  // 저장장치
+  'readMbps', 'writeMbps', 'rpm',
+  // 마더보드
+  'ramSlots', 'maxRamGb', 'maxRamSpeedMhz', 'm2Slots', 'sataPorts', 'pcieX16Slots',
 ]);
 
 interface CacheEntry {
