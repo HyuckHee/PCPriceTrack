@@ -21,7 +21,7 @@ const ALLOWED_SPEC_KEYS = new Set([
   // PSU
   'wattage', 'formFactor', 'modularity', 'efficiency',
   // 쿨러
-  'coolerType', 'tdpRating', 'heightMm', 'radiatorSize', 'fanCount',
+  'coolerType', 'tdpRating', 'heightMm', 'radiatorSize', 'fanCount', 'supportedSockets',
   // 저장장치
   'storageType', 'interface', 'readMbps', 'writeMbps', 'rpm', 'dramCache',
   // 마더보드

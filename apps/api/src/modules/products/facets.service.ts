@@ -12,7 +12,7 @@ const NUMERIC_SPEC_KEYS = new Set([
   // PSU
   'wattage',
   // 쿨러
-  'tdpRating', 'heightMm', 'fanCount',
+  'tdpRating', 'heightMm', 'fanCount', 'radiatorSize',
   // 저장장치
   'readMbps', 'writeMbps', 'rpm',
   // 마더보드
