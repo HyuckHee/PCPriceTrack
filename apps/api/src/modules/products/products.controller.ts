@@ -18,6 +18,11 @@ export class ProductsController {
     return this.productsService.deals(limit ? parseInt(limit) : 20, categoryId);
   }
 
+  @Get('autocomplete')
+  autocomplete(@Query('q') q: string, @Query('limit') limit?: string) {
+    return this.productsService.autocomplete(q ?? '', limit ? parseInt(limit) : 5);
+  }
+
   @Get(':slug')
   findOne(@Param('slug') slug: string) {
     return this.productsService.findBySlug(slug);

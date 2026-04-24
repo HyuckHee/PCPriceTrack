@@ -10,6 +10,12 @@ import { priceRecords } from '../../database/schema/price-records';
 import { stores } from '../../database/schema/stores';
 import { ListProductsDto } from './dto/list-products.dto';
 
+/** 스펙 필터에 허용되는 키 목록 — SQL injection 방지 */
+const ALLOWED_SPEC_KEYS = new Set([
+  'cores', 'threads', 'socket', 'generation', 'vram', 'chipset',
+  'bus_width', 'capacity', 'ddr', 'speed', 'wattage', 'efficiency', 'type',
+]);
+
 /** 통화별 적정 가격 범위 — 이 범위를 벗어나면 크롤링 오염 데이터로 간주 */
 const PRICE_SANITY_FILTER = sql.raw(`
   AND (
@@ -35,7 +41,7 @@ export class ProductsService {
    * 가격은 그룹 내 모든 리스팅의 최저가 ~ 최고가 범위로 표시합니다.
    */
   async list(dto: ListProductsDto) {
-    const { page = 1, limit = 20, categoryId, brand, search, minPrice, maxPrice, sortBy = 'newest' } = dto;
+    const { page = 1, limit = 20, categoryId, brand, brands, search, minPrice, maxPrice, specs, minPerfScore, maxPerfScore, sortBy = 'newest' } = dto;
 
     const ORDER_BY_MAP: Record<string, string> = {
       newest:    'p.created_at DESC',
@@ -43,6 +49,7 @@ export class ProductsService {
       price_asc: 'gp.min_price ASC NULLS LAST',
       price_desc:'gp.min_price DESC NULLS LAST',
       name:      'p.name ASC',
+      value_score: '(p.performance_score::float / NULLIF(gp.min_price::float, 0)) DESC NULLS LAST',
     };
     const orderBy = ORDER_BY_MAP[sortBy] ?? 'p.created_at DESC';
     const offset = (page - 1) * limit;
@@ -59,6 +66,35 @@ export class ProductsService {
       params.push(`%${search}%`);
       pi++;
     }
+
+    // 복수 브랜드 필터 (쉼표 구분)
+    if (brands) {
+      const brandList = brands.split(',').map((b) => b.trim()).filter(Boolean);
+      if (brandList.length > 0) {
+        const placeholders = brandList.map(() => `$${pi++}`).join(', ');
+        extraWhere.push(`p.brand ILIKE ANY(ARRAY[${placeholders}])`);
+        brandList.forEach((b) => params.push(`%${b}%`));
+      }
+    }
+
+    // 스펙 필터 (JSON 파싱)
+    if (specs) {
+      try {
+        const parsed = JSON.parse(specs) as Record<string, Record<string, unknown>>;
+        for (const [key, conditions] of Object.entries(parsed)) {
+          if (!ALLOWED_SPEC_KEYS.has(key)) continue;
+          if (conditions && typeof conditions === 'object') {
+            if (conditions.gte !== undefined) { extraWhere.push(`(p.specs->>'${key}')::numeric >= $${pi++}`); params.push(conditions.gte); }
+            if (conditions.lte !== undefined) { extraWhere.push(`(p.specs->>'${key}')::numeric <= $${pi++}`); params.push(conditions.lte); }
+            if (conditions.eq !== undefined)  { extraWhere.push(`p.specs->>'${key}' = $${pi++}`); params.push(conditions.eq); }
+          }
+        }
+      } catch { /* JSON 파싱 실패 시 무시 */ }
+    }
+
+    // 성능 점수 필터
+    if (minPerfScore !== undefined) { extraWhere.push(`p.performance_score >= $${pi++}`); params.push(minPerfScore); }
+    if (maxPerfScore !== undefined) { extraWhere.push(`p.performance_score <= $${pi++}`); params.push(maxPerfScore); }
 
     const whereClause = extraWhere.length
       ? `AND (p.group_id IS NULL OR p.id = (SELECT p2.id FROM products p2 WHERE p2.group_id = p.group_id ORDER BY p2.created_at LIMIT 1)) AND ${extraWhere.join(' AND ')}`
@@ -83,6 +119,36 @@ export class ProductsService {
       countParams.push(`%${search}%`);
       ci++;
     }
+
+    // 복수 브랜드 필터 (count 쿼리)
+    if (brands) {
+      const brandList = brands.split(',').map((b) => b.trim()).filter(Boolean);
+      if (brandList.length > 0) {
+        const placeholders = brandList.map(() => `$${ci++}`).join(', ');
+        countExtraWhere.push(`p.brand ILIKE ANY(ARRAY[${placeholders}])`);
+        brandList.forEach((b) => countParams.push(`%${b}%`));
+      }
+    }
+
+    // 스펙 필터 (count 쿼리)
+    if (specs) {
+      try {
+        const parsed = JSON.parse(specs) as Record<string, Record<string, unknown>>;
+        for (const [key, conditions] of Object.entries(parsed)) {
+          if (!ALLOWED_SPEC_KEYS.has(key)) continue;
+          if (conditions && typeof conditions === 'object') {
+            if (conditions.gte !== undefined) { countExtraWhere.push(`(p.specs->>'${key}')::numeric >= $${ci++}`); countParams.push(conditions.gte); }
+            if (conditions.lte !== undefined) { countExtraWhere.push(`(p.specs->>'${key}')::numeric <= $${ci++}`); countParams.push(conditions.lte); }
+            if (conditions.eq !== undefined)  { countExtraWhere.push(`p.specs->>'${key}' = $${ci++}`); countParams.push(conditions.eq); }
+          }
+        }
+      } catch { /* JSON 파싱 실패 시 무시 */ }
+    }
+
+    // 성능 점수 필터 (count 쿼리)
+    if (minPerfScore !== undefined) { countExtraWhere.push(`p.performance_score >= $${ci++}`); countParams.push(minPerfScore); }
+    if (maxPerfScore !== undefined) { countExtraWhere.push(`p.performance_score <= $${ci++}`); countParams.push(maxPerfScore); }
+
     const countWhere = countExtraWhere.length
       ? `AND (p.group_id IS NULL OR p.id = (SELECT p2.id FROM products p2 WHERE p2.group_id = p.group_id ORDER BY p2.created_at LIMIT 1)) AND ${countExtraWhere.join(' AND ')}`
       : `AND (p.group_id IS NULL OR p.id = (SELECT p2.id FROM products p2 WHERE p2.group_id = p.group_id ORDER BY p2.created_at LIMIT 1))`;
@@ -408,6 +474,66 @@ export class ProductsService {
     }
 
     return { groupId };
+  }
+
+  // ─── 자동완성 ───────────────────────────────────────────────────────────
+
+  /**
+   * 상품명/브랜드 자동완성.
+   * 최소 2글자 이상 입력 시 결과 반환합니다.
+   */
+  async autocomplete(query: string, limit = 5) {
+    if (query.length < 2) return [];
+
+    const result = await this.pool.query(
+      `SELECT p.name, p.slug, p.brand, c.name AS "categoryName", p.specs,
+              p.performance_score AS "performanceScore",
+              (SELECT MIN(pr.price::numeric) FROM price_records pr
+               INNER JOIN product_listings pl ON pr.listing_id = pl.id
+               WHERE pl.product_id = p.id AND pl.is_active = true
+               AND pr.recorded_at = (SELECT MAX(pr2.recorded_at) FROM price_records pr2 WHERE pr2.listing_id = pl.id)) AS "currentPrice",
+              (SELECT MIN(pr.currency) FROM price_records pr
+               INNER JOIN product_listings pl ON pr.listing_id = pl.id
+               WHERE pl.product_id = p.id AND pl.is_active = true
+               AND pr.recorded_at = (SELECT MAX(pr2.recorded_at) FROM price_records pr2 WHERE pr2.listing_id = pl.id)) AS "currency"
+       FROM products p
+       INNER JOIN categories c ON c.id = p.category_id
+       WHERE (p.name ILIKE $1 OR p.brand ILIKE $1)
+       ORDER BY p.performance_score DESC NULLS LAST
+       LIMIT $2`,
+      [`%${query}%`, limit],
+    );
+
+    return result.rows.map((r) => {
+      const specs = r.specs as Record<string, unknown> | null;
+      const categoryName = (r.categoryName as string)?.toLowerCase() ?? '';
+
+      // 카테고리에 따른 핵심 스펙 추출
+      let keySpec: string | null = null;
+      if (specs) {
+        if (categoryName.includes('gpu') || categoryName.includes('그래픽')) {
+          keySpec = specs.vram ? `${specs.vram}GB VRAM` : null;
+        } else if (categoryName.includes('cpu') || categoryName.includes('프로세서')) {
+          keySpec = specs.cores ? `${specs.cores} Cores` : null;
+        } else if (categoryName.includes('ram') || categoryName.includes('메모리')) {
+          keySpec = specs.capacity ? `${specs.capacity}GB` : null;
+        } else if (categoryName.includes('ssd') || categoryName.includes('저장')) {
+          keySpec = specs.capacity ? `${specs.capacity}GB` : null;
+        }
+      }
+
+      return {
+        name: r.name,
+        slug: r.slug,
+        brand: r.brand,
+        categoryName: r.categoryName,
+        specs,
+        performanceScore: r.performanceScore != null ? Number(r.performanceScore) : null,
+        currentPrice: r.currentPrice != null ? String(r.currentPrice) : null,
+        currency: r.currency,
+        keySpec,
+      };
+    });
   }
 
   // ─── Private helpers ─────────────────────────────────────────────────────

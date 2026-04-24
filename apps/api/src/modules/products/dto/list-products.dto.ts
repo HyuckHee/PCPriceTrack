@@ -10,9 +10,31 @@ export class ListProductsDto {
   @IsString()
   brand?: string;
 
+  /** 쉼표 구분 복수 브랜드 필터 (예: "NVIDIA,AMD") */
+  @IsOptional()
+  @IsString()
+  brands?: string;
+
   @IsOptional()
   @IsString()
   search?: string;
+
+  /** JSON 스펙 필터 (예: '{"cores":{"gte":8}}') */
+  @IsOptional()
+  @IsString()
+  specs?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  minPerfScore?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  maxPerfScore?: number;
 
   @IsOptional()
   @Type(() => Number)
@@ -41,6 +63,6 @@ export class ListProductsDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['newest', 'popular', 'price_asc', 'price_desc', 'name'])
+  @IsIn(['newest', 'popular', 'price_asc', 'price_desc', 'name', 'value_score'])
   sortBy?: string = 'newest';
 }
