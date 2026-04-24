@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { useCurrency } from '@/context/CurrencyContext';
+import { useBuildEstimator } from '@/context/BuildEstimatorContext';
 import { formatPrice, formatPriceShort, convertPrice, extractSpecBadges } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -31,6 +33,7 @@ interface Product {
 
 export function ProductListRow({ p }: { p: Product }) {
   const { displayCurrency, usdToKrw } = useCurrency();
+  const { open: openEstimator } = useBuildEstimator();
 
   const categorySlug = CATEGORY_NAME_TO_SLUG[p.category.name] ?? null;
   const categoryIcon = categorySlug ? (CATEGORY_ICONS[categorySlug] ?? '📦') : '📦';
@@ -148,6 +151,22 @@ export function ProductListRow({ p }: { p: Product }) {
             <span className="text-xs text-gray-500">가격 미확인</span>
           )}
         </div>
+
+        {/* 견적에 추가 버튼 */}
+        {isDraggable && (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openEstimator();
+              toast.success(`${p.category.name} 부품이 견적 패널에서 선택 가능합니다.`);
+            }}
+            className="shrink-0 ml-1 px-2 py-1 text-xs rounded-md border border-gray-600 text-gray-400 opacity-0 group-hover:opacity-100 hover:border-blue-500 hover:text-blue-400 transition-all"
+            title="견적에 추가"
+          >
+            + 견적
+          </button>
+        )}
 
         {/* Drag hint */}
         {isDraggable && (

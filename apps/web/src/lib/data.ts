@@ -118,6 +118,25 @@ export interface PriceRecord {
 
 // ── Data functions ─────────────────────────────────────────────────────────────
 
+// ── Facets / Autocomplete 타입 ────────────────────────────────────────────────
+
+export interface FacetsResponse {
+  specs: Record<string, { type: 'range' | 'enum'; min?: number; max?: number; values?: string[] }>;
+  brands: string[];
+  performanceScore: { min: number; max: number } | null;
+}
+
+export interface AutocompleteItem {
+  name: string;
+  slug: string;
+  brand: string;
+  categoryName: string;
+  currentPrice: string | null;
+  currency: string | null;
+  keySpec: string | null;
+  performanceScore: number | null;
+}
+
 export async function fetchProducts(params: {
   search: string;
   categoryId: string;
@@ -125,7 +144,11 @@ export async function fetchProducts(params: {
   maxPrice: string;
   page: string;
   brand?: string;
+  brands?: string;
   sortBy?: string;
+  specs?: string;
+  minPerfScore?: string;
+  maxPerfScore?: string;
 }): Promise<ProductsResponse> {
   if (IS_DEMO) {
     return getMockProductsResponse({ ...params, limit: 24 }) as unknown as ProductsResponse;
@@ -137,9 +160,22 @@ export async function fetchProducts(params: {
   if (params.minPrice) query.set('minPrice', params.minPrice);
   if (params.maxPrice) query.set('maxPrice', params.maxPrice);
   if (params.brand) query.set('brand', params.brand);
+  if (params.brands) query.set('brands', params.brands);
   if (params.sortBy) query.set('sortBy', params.sortBy);
+  if (params.specs) query.set('specs', params.specs);
+  if (params.minPerfScore) query.set('minPerfScore', params.minPerfScore);
+  if (params.maxPerfScore) query.set('maxPerfScore', params.maxPerfScore);
 
   return api.get<ProductsResponse>(`/products?${query}`);
+}
+
+export async function fetchFacets(categoryId: string): Promise<FacetsResponse> {
+  return api.get<FacetsResponse>(`/products/facets?categoryId=${categoryId}`);
+}
+
+export async function fetchAutocomplete(q: string): Promise<AutocompleteItem[]> {
+  if (q.length < 2) return [];
+  return api.get<AutocompleteItem[]>(`/products/autocomplete?q=${encodeURIComponent(q)}&limit=5`);
 }
 
 export async function fetchCategories(): Promise<Category[]> {

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { fetchProducts, fetchCategories } from '@/lib/data';
+import { fetchProducts, fetchCategories, fetchFacets, type FacetsResponse } from '@/lib/data';
 import { ProductListRow } from '@/components/ProductListRow';
 import { ProductCategorySidebar } from '@/components/ProductCategorySidebar';
 import { ProductFilters } from '@/components/ProductFilters';
@@ -17,7 +17,11 @@ export default async function ProductsPage({
     minPrice?: string;
     maxPrice?: string;
     brand?: string;
+    brands?: string;
     sortBy?: string;
+    specs?: string;
+    minPerfScore?: string;
+    maxPerfScore?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -27,21 +31,43 @@ export default async function ProductsPage({
   const minPrice = params.minPrice ?? '';
   const maxPrice = params.maxPrice ?? '';
   const brand = params.brand ?? '';
+  const brands = params.brands ?? '';
   const sortBy = params.sortBy ?? 'newest';
+  const specs = params.specs ?? '';
+  const minPerfScore = params.minPerfScore ?? '';
+  const maxPerfScore = params.maxPerfScore ?? '';
 
   let products: Awaited<ReturnType<typeof fetchProducts>>['data'] = [];
   let meta = { total: 0, page: 1, totalPages: 1 };
   let categories: Awaited<ReturnType<typeof fetchCategories>> = [];
+  let facets: FacetsResponse | null = null;
   let apiError = false;
 
   try {
-    const [productsRes, categoriesRes] = await Promise.all([
-      fetchProducts({ search, categoryId, minPrice, maxPrice, page, brand, sortBy }),
+    const promises: [
+      ReturnType<typeof fetchProducts>,
+      ReturnType<typeof fetchCategories>,
+      ...(ReturnType<typeof fetchFacets>)[],
+    ] = [
+      fetchProducts({ search, categoryId, minPrice, maxPrice, page, brand, brands, sortBy, specs, minPerfScore, maxPerfScore }),
       fetchCategories(),
-    ]);
+    ];
+
+    // categoryId가 있을 때만 facets를 가져옴
+    if (categoryId) {
+      promises.push(fetchFacets(categoryId));
+    }
+
+    const results = await Promise.all(promises);
+    const productsRes = results[0] as Awaited<ReturnType<typeof fetchProducts>>;
+    const categoriesRes = results[1] as Awaited<ReturnType<typeof fetchCategories>>;
     products = productsRes.data;
     meta = productsRes.meta;
     categories = categoriesRes;
+
+    if (categoryId && results[2]) {
+      facets = results[2] as FacetsResponse;
+    }
   } catch {
     apiError = true;
   }
@@ -54,7 +80,11 @@ export default async function ProductsPage({
       ...(minPrice && { minPrice }),
       ...(maxPrice && { maxPrice }),
       ...(brand && { brand }),
+      ...(brands && { brands }),
       ...(sortBy && sortBy !== 'newest' && { sortBy }),
+      ...(specs && { specs }),
+      ...(minPerfScore && { minPerfScore }),
+      ...(maxPerfScore && { maxPerfScore }),
       ...overrides,
     });
     return `/products?${p}`;
@@ -78,6 +108,9 @@ export default async function ProductsPage({
     ? (categories.find((c) => c.id === categoryId)?.name ?? '')
     : '';
 
+  // facets에서 브랜드 목록 추출
+  const facetBrands = facets?.brands ?? [];
+
   return (
     <div className="flex gap-6 items-start">
       {/* ── Left: Category sidebar ── */}
@@ -99,7 +132,11 @@ export default async function ProductsPage({
         </div>
 
         {/* 다나와 스타일 필터 패널 */}
-        <ProductFilters categoryName={activeCategoryName} />
+        <ProductFilters
+          categoryName={activeCategoryName}
+          brands={facetBrands}
+          facets={facets}
+        />
 
         {/* 상품 목록 */}
         {products.length === 0 ? (

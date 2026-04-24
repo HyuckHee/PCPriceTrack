@@ -11,6 +11,7 @@ import { BuildEstimatorProvider } from '@/context/BuildEstimatorContext';
 import { BuildDetailSidebarProvider } from '@/context/BuildDetailSidebarContext';
 import BuildEstimatorButton from '@/components/BuildEstimatorButton';
 import BuildEstimatorPanel from '@/components/BuildEstimatorPanel';
+import GlobalSearch from '@/components/GlobalSearch';
 import BuildDetailSidebar from '@/components/BuildDetailSidebar';
 import { AuthProvider } from '@/context/AuthContext';
 import AuthNav from '@/components/AuthNav';
@@ -52,6 +53,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     priority
                   />
                 </Link>
+                <div className="flex-1 max-w-md mx-4">
+                  <GlobalSearch />
+                </div>
                 <div className="flex items-center gap-3">
                   <BuildEstimatorButton />
                   <CurrencyToggle />

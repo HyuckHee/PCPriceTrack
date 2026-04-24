@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useBuildEstimator } from '@/context/BuildEstimatorContext';
 import { useBuildDetailSidebar } from '@/context/BuildDetailSidebarContext';
@@ -85,6 +86,7 @@ export default function BuildEstimatorPanel() {
   const { isOpen, close, pendingBudget, clearPendingBudget } = useBuildEstimator();
   const { openSidebar, lastDeletedId } = useBuildDetailSidebar();
   const { displayCurrency: currency, usdToKrw } = useCurrency();
+  const router = useRouter();
 
   // Drag state — initialize with static value to avoid SSR/client mismatch
   const [pos, setPos] = useState<{ x: number; y: number }>({ x: 0, y: 80 });
@@ -820,16 +822,35 @@ export default function BuildEstimatorPanel() {
                           ) : isDragging ? (
                             <span className="ml-auto text-xs text-gray-500 text-[10px]">패널에 놓기</span>
                           ) : (
-                            <button
-                              onClick={() => handleSwapOpen(cat, comp)}
-                              className={`ml-auto text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer ${
-                                swapTarget === cat
-                                  ? 'border-blue-500 text-blue-400 bg-blue-500/10'
-                                  : 'border-gray-600 text-gray-400 hover:border-gray-400 hover:text-white'
-                              }`}
-                            >
-                              {swapTarget === cat ? '닫기' : '🔄 교체'}
-                            </button>
+                            <div className="ml-auto flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  // 해당 카테고리 예산 배분 금액 계산
+                                  const allocatedBudget = Math.round(budget * (ratios[cat] ?? 0.10));
+                                  const categoryName = CATEGORY_LABELS[cat];
+                                  const params = new URLSearchParams({
+                                    search: categoryName,
+                                    maxPrice: String(allocatedBudget),
+                                    sortBy: 'value_score',
+                                  });
+                                  router.push(`/products?${params}`);
+                                }}
+                                className="text-xs px-2 py-0.5 rounded-full border border-gray-600 text-gray-400 hover:border-gray-400 hover:text-white transition-colors cursor-pointer"
+                                title="부품 찾기"
+                              >
+                                🔍
+                              </button>
+                              <button
+                                onClick={() => handleSwapOpen(cat, comp)}
+                                className={`text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer ${
+                                  swapTarget === cat
+                                    ? 'border-blue-500 text-blue-400 bg-blue-500/10'
+                                    : 'border-gray-600 text-gray-400 hover:border-gray-400 hover:text-white'
+                                }`}
+                              >
+                                {swapTarget === cat ? '닫기' : '🔄 교체'}
+                              </button>
+                            </div>
                           )}
                         </div>
                         {comp ? (
