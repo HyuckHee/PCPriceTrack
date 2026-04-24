@@ -2,6 +2,22 @@ import { GpuSpec, GpuSpecSchema, PowerConnectorEnum } from '../../../../products
 import { RawSpecData, SpecParseResult, SpecParser } from '../spec-parser.interface';
 import { findByKeys, parseIntValue, parseMm } from '../parse-utils';
 
+/** "8 GB", "8GB", "8192 MB", "8192MB" → GB 정수로 변환 */
+function parseVramGb(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const mbMatch = raw.match(/([\d,]+)\s*mb/i);
+  if (mbMatch) {
+    const mb = parseInt(mbMatch[1].replace(/,/g, ''), 10);
+    return mb >= 512 ? Math.round(mb / 1024) : undefined;
+  }
+  const gbMatch = raw.match(/([\d,]+)\s*gb/i);
+  if (gbMatch) return parseInt(gbMatch[1].replace(/,/g, ''), 10);
+  // 단위 없이 숫자만 있는 경우 (ex: "8")
+  const numMatch = raw.match(/^(\d+)$/);
+  if (numMatch) return parseInt(numMatch[1], 10);
+  return undefined;
+}
+
 function parsePowerConnectors(raw: string): Array<typeof PowerConnectorEnum._type> {
   const connectors: Array<typeof PowerConnectorEnum._type> = [];
   if (/12v-2x6|12v2x6/i.test(raw)) connectors.push('12V2x6');
@@ -41,9 +57,12 @@ export class NeweggGpuParser implements SpecParser {
     if (tdp) partial.tdp = tdp;
     else missing.push('tdp');
 
-    // VRAM
-    const vramRaw = findByKeys(specTable, ['memory size', 'video memory', 'vram', 'graphics ram size']);
-    const vramGb = parseIntValue(vramRaw);
+    // VRAM — MB 단위("8192 MB") → GB 변환 포함
+    const vramRaw = findByKeys(specTable, [
+      'memory size', 'video memory', 'vram', 'graphics ram size',
+      'frame buffer', 'dedicated memory', 'dedicated video memory',
+    ]);
+    const vramGb = parseVramGb(vramRaw);
     if (vramGb) partial.vramGb = vramGb;
     else missing.push('vramGb');
 
