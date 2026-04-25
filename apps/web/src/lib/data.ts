@@ -40,6 +40,9 @@ export interface ProductListItem {
   previousMinPrice: string | null;
   storeCount: number | null;
   storeNames: string | null;
+  performanceScore: number | null;
+  /** 제품 스펙 (호환성 판별에 사용) */
+  specs: Record<string, unknown>;
   category: { id: string; name: string };
 }
 

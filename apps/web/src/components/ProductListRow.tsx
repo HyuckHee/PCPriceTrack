@@ -31,7 +31,7 @@ interface Product {
   category: { id: string; name: string };
 }
 
-export function ProductListRow({ p }: { p: Product }) {
+export function ProductListRow({ p, incompatibleReason }: { p: Product; incompatibleReason?: string | null }) {
   const { displayCurrency, usdToKrw } = useCurrency();
   const { open: openEstimator } = useBuildEstimator();
 
@@ -81,10 +81,19 @@ export function ProductListRow({ p }: { p: Product }) {
     <div
       draggable={isDraggable}
       onDragStart={isDraggable ? handleDragStart : undefined}
-      className={`group bg-gray-800 border border-gray-700 rounded-xl hover:border-gray-500 transition-colors ${
+      className={`group relative bg-gray-800 border border-gray-700 rounded-xl hover:border-gray-500 transition-colors ${
         isDraggable ? 'cursor-grab active:cursor-grabbing' : ''
-      }`}
+      } ${incompatibleReason ? 'opacity-50' : ''}`}
     >
+      {/* 비호환 제품 뱃지 + 사유 표시 */}
+      {incompatibleReason && (
+        <div className="flex items-center gap-2 px-3 pt-2">
+          <span className="bg-red-600 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md">
+            호환 불가
+          </span>
+          <span className="text-[11px] text-red-400">{incompatibleReason}</span>
+        </div>
+      )}
       <Link
         href={`/products/${p.slug}`}
         className="flex items-center gap-4 p-3 pr-4"
