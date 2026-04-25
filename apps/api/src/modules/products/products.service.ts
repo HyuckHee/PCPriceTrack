@@ -99,6 +99,17 @@ export class ProductsService {
             if (conditions.gte !== undefined) { extraWhere.push(`(p.specs->>'${key}')::numeric >= $${pi++}`); params.push(conditions.gte); }
             if (conditions.lte !== undefined) { extraWhere.push(`(p.specs->>'${key}')::numeric <= $${pi++}`); params.push(conditions.lte); }
             if (conditions.eq !== undefined)  { extraWhere.push(`p.specs->>'${key}' = $${pi++}`); params.push(conditions.eq); }
+            // 배열 포함 여부 (JSON 배열 필드용 — 예: supportedSockets @> '"LGA1700"')
+            if (conditions.contains !== undefined) {
+              extraWhere.push(`p.specs->'${key}' @> $${pi++}::jsonb`);
+              params.push(JSON.stringify(conditions.contains));
+            }
+            // 여러 값 중 하나 일치 (예: ramType IN ('DDR4', 'DDR5'))
+            if (conditions.in !== undefined && Array.isArray(conditions.in) && conditions.in.length > 0) {
+              const placeholders = (conditions.in as string[]).map(() => `$${pi++}`).join(', ');
+              extraWhere.push(`p.specs->>'${key}' IN (${placeholders})`);
+              (conditions.in as string[]).forEach((v) => params.push(v));
+            }
           }
         }
       } catch { /* JSON 파싱 실패 시 무시 */ }
@@ -152,6 +163,17 @@ export class ProductsService {
             if (conditions.gte !== undefined) { countExtraWhere.push(`(p.specs->>'${key}')::numeric >= $${ci++}`); countParams.push(conditions.gte); }
             if (conditions.lte !== undefined) { countExtraWhere.push(`(p.specs->>'${key}')::numeric <= $${ci++}`); countParams.push(conditions.lte); }
             if (conditions.eq !== undefined)  { countExtraWhere.push(`p.specs->>'${key}' = $${ci++}`); countParams.push(conditions.eq); }
+            // 배열 포함 여부 (JSON 배열 필드용 — 예: supportedSockets @> '"LGA1700"')
+            if (conditions.contains !== undefined) {
+              countExtraWhere.push(`p.specs->'${key}' @> $${ci++}::jsonb`);
+              countParams.push(JSON.stringify(conditions.contains));
+            }
+            // 여러 값 중 하나 일치 (예: ramType IN ('DDR4', 'DDR5'))
+            if (conditions.in !== undefined && Array.isArray(conditions.in) && conditions.in.length > 0) {
+              const placeholders = (conditions.in as string[]).map(() => `$${ci++}`).join(', ');
+              countExtraWhere.push(`p.specs->>'${key}' IN (${placeholders})`);
+              (conditions.in as string[]).forEach((v) => countParams.push(v));
+            }
           }
         }
       } catch { /* JSON 파싱 실패 시 무시 */ }
