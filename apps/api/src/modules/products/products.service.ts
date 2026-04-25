@@ -26,6 +26,8 @@ const ALLOWED_SPEC_KEYS = new Set([
   'storageType', 'interface', 'readMbps', 'writeMbps', 'rpm', 'dramCache',
   // 마더보드
   'ramType', 'ramSlots', 'maxRamGb', 'maxRamSpeedMhz', 'm2Slots', 'sataPorts', 'pcieX16Slots',
+  // 케이스
+  'maxGpuLengthMm', 'maxCoolerHeightMm', 'supportedFormFactors', 'psuFormFactor',
 ]);
 
 /** 통화별 적정 가격 범위 — 이 범위를 벗어나면 크롤링 오염 데이터로 간주 */
