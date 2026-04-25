@@ -229,6 +229,7 @@ export interface BuildComponent {
   budgetAllocation?: number;
   performanceScore?: number | null;
   quantity?: number;
+  specs?: Record<string, unknown>;
 }
 
 export interface BuildWarning {

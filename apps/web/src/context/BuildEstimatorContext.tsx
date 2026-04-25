@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useState } from 'react';
+import type { BuildComponent } from '@/lib/data';
 
 interface PendingBudget {
   budget: number;
@@ -15,6 +16,8 @@ interface BuildEstimatorContextValue {
   toggle: () => void;
   openWithBudget: (budget: number, currency: string) => void;
   clearPendingBudget: () => void;
+  components: (BuildComponent | null)[];
+  setComponents: (components: (BuildComponent | null)[]) => void;
 }
 
 const BuildEstimatorContext = createContext<BuildEstimatorContextValue | null>(null);
@@ -22,6 +25,7 @@ const BuildEstimatorContext = createContext<BuildEstimatorContextValue | null>(n
 export function BuildEstimatorProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [pendingBudget, setPendingBudget] = useState<PendingBudget | null>(null);
+  const [components, setComponentsState] = useState<(BuildComponent | null)[]>([]);
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => setIsOpen(false), []);
@@ -33,9 +37,14 @@ export function BuildEstimatorProvider({ children }: { children: React.ReactNode
   }, []);
 
   const clearPendingBudget = useCallback(() => setPendingBudget(null), []);
+  const setComponents = useCallback((c: (BuildComponent | null)[]) => setComponentsState(c), []);
 
   return (
-    <BuildEstimatorContext.Provider value={{ isOpen, pendingBudget, open, close, toggle, openWithBudget, clearPendingBudget }}>
+    <BuildEstimatorContext.Provider value={{
+      isOpen, pendingBudget,
+      open, close, toggle, openWithBudget, clearPendingBudget,
+      components, setComponents,
+    }}>
       {children}
     </BuildEstimatorContext.Provider>
   );

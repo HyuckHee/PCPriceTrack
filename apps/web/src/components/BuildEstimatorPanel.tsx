@@ -83,7 +83,7 @@ function getDefaultPos() {
 }
 
 export default function BuildEstimatorPanel() {
-  const { isOpen, close, pendingBudget, clearPendingBudget } = useBuildEstimator();
+  const { isOpen, close, pendingBudget, clearPendingBudget, setComponents } = useBuildEstimator();
   const { openSidebar, lastDeletedId } = useBuildDetailSidebar();
   const { displayCurrency: currency, usdToKrw } = useCurrency();
   const router = useRouter();
@@ -446,6 +446,15 @@ export default function BuildEstimatorPanel() {
     estimate && Array.isArray(estimate.components)
       ? CATEGORY_ORDER.map((cat) => estimate.components.find((c) => c?.category === cat) ?? null)
       : [];
+
+  // estimate 변경 시 Context에 부품 목록 동기화 (호환성 필터용)
+  useEffect(() => {
+    if (estimate?.components) {
+      setComponents(estimate.components);
+    } else {
+      setComponents([]);
+    }
+  }, [estimate, setComponents]);
 
   const bottleneckAnalysis = useMemo(() => calcBottleneck(components, usage), [components, usage]);
 
