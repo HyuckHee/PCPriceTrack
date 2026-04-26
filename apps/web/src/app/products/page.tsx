@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { fetchProducts, fetchCategories, fetchFacets, type FacetsResponse } from '@/lib/data';
-import { ProductListRow } from '@/components/ProductListRow';
+import { ProductListWithCompatibility } from '@/components/ProductListWithCompatibility';
 import { ProductCategorySidebar } from '@/components/ProductCategorySidebar';
 import { ProductFilters } from '@/components/ProductFilters';
 import { Pagination } from '@/components/Pagination';
@@ -142,11 +142,10 @@ export default async function ProductsPage({
         {products.length === 0 ? (
           <p className="text-gray-400 py-12 text-center">검색 결과가 없습니다.</p>
         ) : (
-          <div className="flex flex-col gap-1.5">
-            {products.map((p) => (
-              <ProductListRow key={p.id} p={p} />
-            ))}
-          </div>
+          <ProductListWithCompatibility
+            products={products}
+            categorySlug={activeCategoryName.toLowerCase().replace(/\s+/g, '')}
+          />
         )}
 
         <Pagination

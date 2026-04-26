@@ -14,9 +14,10 @@ const SPEC_LABELS: Record<string, string> = {
 interface Props {
   facets: FacetsResponse | null;
   categoryId: string;
+  lockedSpecs?: Record<string, unknown>;
 }
 
-export function SpecFilterPanel({ facets, categoryId }: Props) {
+export function SpecFilterPanel({ facets, categoryId, lockedSpecs }: Props) {
   const [isPending, startTransition] = useTransition();
 
   const [params, setParams] = useQueryStates(
@@ -102,24 +103,41 @@ export function SpecFilterPanel({ facets, categoryId }: Props) {
 
           // enum 타입
           const selected = (specsObj[key] as string[] | undefined) ?? [];
+          const lockedValue = lockedSpecs?.[key];
+          // 잠긴 값 계산: eq → 단일 값, in → 배열
+          const lockedValues: string[] = lockedValue
+            ? typeof lockedValue === 'object' && 'eq' in (lockedValue as Record<string, unknown>)
+              ? [(lockedValue as Record<string, string>).eq]
+              : typeof lockedValue === 'object' && 'in' in (lockedValue as Record<string, unknown>)
+                ? (lockedValue as Record<string, string[]>).in
+                : []
+            : [];
+          const isLocked = lockedValues.length > 0;
+
           return (
             <div key={key} className="flex items-start gap-2">
               <span className="shrink-0 w-24 text-xs text-gray-400 pt-1">{label}</span>
               <div className="flex flex-wrap gap-1.5">
                 {spec.values?.map((val) => {
-                  const isActive = selected.includes(val);
+                  const isLockedValue = lockedValues.includes(val);
+                  const isDisabledByLock = isLocked && !isLockedValue;
+                  const isActive = selected.includes(val) || isLockedValue;
                   return (
                     <button
                       key={val}
-                      onClick={() => toggleSpecEnum(key, val)}
-                      disabled={isPending}
+                      onClick={() => !isLockedValue && !isDisabledByLock && toggleSpecEnum(key, val)}
+                      disabled={isPending || isLockedValue || isDisabledByLock}
                       className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                        isActive
-                          ? 'bg-blue-600 border-blue-500 text-white'
-                          : 'bg-gray-900 border-gray-600 text-gray-300 hover:border-gray-400 hover:text-white'
+                        isLockedValue
+                          ? 'bg-blue-900/50 border-blue-500/40 text-blue-300 cursor-default'
+                          : isDisabledByLock
+                            ? 'bg-gray-900 border-gray-700 text-gray-600 cursor-not-allowed line-through opacity-40'
+                            : isActive
+                              ? 'bg-blue-600 border-blue-500 text-white'
+                              : 'bg-gray-900 border-gray-600 text-gray-300 hover:border-gray-400 hover:text-white'
                       }`}
                     >
-                      {val}
+                      {val}{isLockedValue && ' 🔒'}
                     </button>
                   );
                 })}

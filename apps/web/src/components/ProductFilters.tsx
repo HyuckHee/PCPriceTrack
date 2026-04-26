@@ -3,6 +3,10 @@
 import { useQueryStates, parseAsString, parseAsArrayOf } from 'nuqs';
 import { useTransition, useState, useEffect } from 'react';
 import type { FacetsResponse } from '@/lib/data';
+import { useBuildEstimator } from '@/context/BuildEstimatorContext';
+import { useCompatibilityConstraints } from '@/hooks/useCompatibilityConstraints';
+import { CompatibilityBanner } from './CompatibilityBanner';
+import { SpecFilterPanel } from './SpecFilterPanel';
 
 const SORT_OPTIONS = [
   { value: 'popular',     label: '인기상품' },
@@ -13,12 +17,6 @@ const SORT_OPTIONS = [
   { value: 'name',        label: '상품명순' },
 ] as const;
 
-// 스펙 한국어 라벨
-const SPEC_LABELS: Record<string, string> = {
-  cores: '코어 수', threads: '스레드', socket: '소켓', generation: '세대',
-  vram: 'VRAM (GB)', chipset: '칩셋', bus_width: '버스 폭', capacity: '용량 (GB)',
-  ddr: 'DDR', speed: '속도', wattage: '와트', efficiency: '효율', type: '타입',
-};
 
 interface Props {
   categoryName: string;
@@ -44,6 +42,16 @@ export function ProductFilters({ categoryName, brands: facetBrands, facets }: Pr
       maxPerfScore: parseAsString.withDefault(''),
     },
     { shallow: false },
+  );
+
+  const { components: builderComponents } = useBuildEstimator();
+  const [showIncompatible, setShowIncompatible] = useState(false);
+
+  // 현재 카테고리에 대한 호환성 제약 계산
+  const categorySlug = categoryName.toLowerCase().replace(/\s+/g, '');
+  const { constraints, specsFilter, activeSummary } = useCompatibilityConstraints(
+    categorySlug,
+    builderComponents,
   );
 
   const [searchInput, setSearchInput] = useState(params.search);
@@ -77,25 +85,27 @@ export function ProductFilters({ categoryName, brands: facetBrands, facets }: Pr
   // 스펙 필터 파싱 / 업데이트
   const specsObj: Record<string, unknown> = params.specs ? (() => { try { return JSON.parse(params.specs); } catch { return {}; } })() : {};
 
-  const updateSpec = (key: string, value: unknown) => {
-    const next = { ...specsObj, [key]: value };
-    // 빈 값 제거
-    if (value === '' || value === null || value === undefined) delete next[key];
-    if (typeof value === 'object' && value !== null) {
-      const obj = value as Record<string, string>;
-      if (!obj.min && !obj.max) delete next[key];
+  // 호환성 필터가 변경되면 specs 파라미터에 병합하여 URL 업데이트
+  useEffect(() => {
+    if (Object.keys(specsFilter).length === 0) return;
+    if (showIncompatible) {
+      // 토글 ON: 호환성 제약 제거, 사용자 필터만 유지
+      const userOnly = { ...specsObj };
+      for (const key of Object.keys(specsFilter)) {
+        if (JSON.stringify(userOnly[key]) === JSON.stringify(specsFilter[key])) {
+          delete userOnly[key];
+        }
+      }
+      const str = Object.keys(userOnly).length > 0 ? JSON.stringify(userOnly) : '';
+      if (str !== params.specs) apply({ specs: str, page: '1' });
+    } else {
+      // 토글 OFF: 호환성 제약 병합
+      const merged = { ...specsObj, ...specsFilter };
+      const str = JSON.stringify(merged);
+      if (str !== params.specs) apply({ specs: str, page: '1' });
     }
-    const str = Object.keys(next).length > 0 ? JSON.stringify(next) : '';
-    apply({ specs: str, page: '1' });
-  };
-
-  const toggleSpecEnum = (specKey: string, val: string) => {
-    const current = (specsObj[specKey] as string[] | undefined) ?? [];
-    const next = current.includes(val)
-      ? current.filter((x) => x !== val)
-      : [...current, val];
-    updateSpec(specKey, next.length > 0 ? next : null);
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [specsFilter, showIncompatible]);
 
   const brands = facetBrands && facetBrands.length > 0 ? facetBrands : [];
 
@@ -236,64 +246,22 @@ export function ProductFilters({ categoryName, brands: facetBrands, facets }: Pr
           </div>
         )}
 
-        {/* 동적 스펙 필터 (facets 기반) */}
-        {facets && Object.keys(facets.specs).length > 0 && (
-          <div className="px-4 py-3 space-y-3">
-            <span className="text-xs font-semibold text-gray-400">스펙 필터</span>
-            {Object.entries(facets.specs).map(([key, spec]) => {
-              const label = SPEC_LABELS[key] ?? key;
-              if (spec.type === 'range') {
-                const rangeVal = (specsObj[key] as { min?: string; max?: string } | undefined) ?? {};
-                return (
-                  <div key={key} className="flex items-center gap-2">
-                    <span className="shrink-0 w-20 text-xs text-gray-400">{label}</span>
-                    <input
-                      value={rangeVal.min ?? ''}
-                      onChange={(e) => updateSpec(key, { ...rangeVal, min: e.target.value })}
-                      placeholder={spec.min != null ? String(spec.min) : '최소'}
-                      type="number"
-                      className="w-20 bg-gray-900 border border-gray-600 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-blue-500 placeholder-gray-600"
-                    />
-                    <span className="text-gray-500 text-xs">~</span>
-                    <input
-                      value={rangeVal.max ?? ''}
-                      onChange={(e) => updateSpec(key, { ...rangeVal, max: e.target.value })}
-                      placeholder={spec.max != null ? String(spec.max) : '최대'}
-                      type="number"
-                      className="w-20 bg-gray-900 border border-gray-600 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-blue-500 placeholder-gray-600"
-                    />
-                  </div>
-                );
-              }
-              // enum 타입
-              const selected = (specsObj[key] as string[] | undefined) ?? [];
-              return (
-                <div key={key} className="flex items-start gap-2">
-                  <span className="shrink-0 w-20 text-xs text-gray-400 pt-1">{label}</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {spec.values?.map((val) => {
-                      const isActive = selected.includes(val);
-                      return (
-                        <button
-                          key={val}
-                          onClick={() => toggleSpecEnum(key, val)}
-                          className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                            isActive
-                              ? 'bg-blue-600 border-blue-500 text-white'
-                              : 'bg-gray-900 border-gray-600 text-gray-300 hover:border-gray-400 hover:text-white'
-                          }`}
-                        >
-                          {val}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
+
+      {/* 호환성 배너 */}
+      <CompatibilityBanner
+        constraints={constraints}
+        activeSummary={activeSummary}
+        showIncompatible={showIncompatible}
+        onToggleIncompatible={setShowIncompatible}
+      />
+
+      {/* 동적 스펙 필터 (facets 기반, 호환성 잠금 지원) */}
+      <SpecFilterPanel
+        facets={facets ?? null}
+        categoryId={params.categoryId}
+        lockedSpecs={showIncompatible ? undefined : specsFilter}
+      />
 
       {/* ── 정렬 탭 ── */}
       <div className="flex items-center gap-1">
